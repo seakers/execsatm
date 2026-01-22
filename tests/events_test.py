@@ -49,7 +49,7 @@ class TestGeophysicalEvent(unittest.TestCase):
             GeophysicalEvent(event_type="fire", severity=0.6, location=[1, 2, 3, 4], t_detect=0, d_exp="1")
 
     def test_temporal_status_methods(self):
-        event = GeophysicalEvent("flood", [1, 2, 3, 4], 0, 100, 1.0, 100)
+        event = GeophysicalEvent("flood", [1, 2, 3, 4], 100, 100, 1.0, 100)
 
         self.assertTrue(event.is_future(50))
         self.assertFalse(event.is_active(50))

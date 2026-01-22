@@ -1024,7 +1024,7 @@ class TestExplicitCapabilityRequirement(unittest.TestCase):
         self.assertEqual(req_dict["req_type"], RequirementTypes.CAPABILITY.value)
         self.assertEqual(req_dict["attribute"], self.attribute)
         self.assertEqual(req_dict["strategy"], CapabilityPreferenceStrategies.EXPLICIT.value)
-        self.assertEqual(req_dict["valid_values"], set(self.req.valid_values))
+        self.assertEqual(sorted(req_dict["valid_values"]), sorted(self.req.valid_values))
         self.assertEqual(req_dict["id"], self.req.id)
 
     def test_from_dict(self):

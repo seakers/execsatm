@@ -230,6 +230,7 @@ class ObservationOpportunity:
 
         # Define necessary merge conditions
         merge_conditions = [
+                other is not self,                                  # not the same observation opportunity
                 self.instrument_name == other.instrument_name,      # same instrument
                 min_duration_req <= max_duration,                   # duration requirements do not exceed maximum allowed duration
                 not math.isnan(min_duration_req),                   # joint minimum duration requirements is valid

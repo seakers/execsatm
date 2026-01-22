@@ -1,8 +1,8 @@
 import unittest
 
-from chess3d.agents.planning.observations import ObservationOpportunity
-from chess3d.agents.planning.tasks import DefaultMissionTask
-from chess3d.utils import Interval, print_welcome
+from execsatm.observations import ObservationOpportunity
+from execsatm.tasks import DefaultMissionTask
+from execsatm.utils import Interval, print_welcome
 
 class TestObservationOpportunity(unittest.TestCase):
     def test_observation_opportunity(self):

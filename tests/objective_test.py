@@ -32,7 +32,7 @@ class TestDefaultObjectives(unittest.TestCase):
         self.assertRaises(AssertionError, DefaultMissionObjective,
                           parameter=123, # invalid parameter type
                           requirements=[self.req_1_1, self.req_1_2])
-        self.assertRaises(ValueError, DefaultMissionObjective,
+        self.assertRaises(AssertionError, DefaultMissionObjective,
                           parameter=self.parameter,
                           requirements=[])  # empty requirements list
         self.assertRaises(ValueError, DefaultMissionObjective,
@@ -146,7 +146,7 @@ class TestDefaultObjectives(unittest.TestCase):
             "requirements": [], # no requirements
             "id": self.objective.id
         }
-        self.assertRaises(ValueError, DefaultMissionObjective.from_dict, obj_dict)
+        self.assertRaises(AssertionError, DefaultMissionObjective.from_dict, obj_dict)
 
         obj_dict = {
             "objective_type": "default_mission",
@@ -329,7 +329,7 @@ class TestEventDrivenObjectives(unittest.TestCase):
             "requirements": [], # no requirements
             "id": self.event_objective.id
         }
-        self.assertRaises(ValueError, EventDrivenObjective.from_dict, obj_dict)
+        self.assertRaises(AssertionError, EventDrivenObjective.from_dict, obj_dict)
 
         obj_dict = {
             # "objective_type": "event_driven", # missing objective type

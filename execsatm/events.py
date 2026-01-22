@@ -121,7 +121,7 @@ class GeophysicalEvent:
             # same severity
             abs(self.severity - other.severity) < 1e-6,
             # same location 
-            all([abs(a - b) < 1e-6 for a, b in zip(self.location, other.location)]) if isinstance(self.location, (list, tuple)) and isinstance(other.location, (list, tuple)) and len(self.location) == len(other.location) else self.location == other.location,
+            all([abs(a - b) < 1e-6 for a, b in zip(self.location, other.location)]) if isinstance(self.location, (list, tuple)) and isinstance(other.location, (list, tuple)) and len(self.location) == len(other.location) == 4 else self.location == other.location,
             # overlapping availability intervals
             self.availability.overlaps(other.availability)
         ]
