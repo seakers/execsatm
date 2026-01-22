@@ -2,7 +2,7 @@ import unittest
 
 from execsatm.observations import ObservationOpportunity
 from execsatm.tasks import DefaultMissionTask
-from execsatm.utils import Interval, print_welcome
+from execsatm.utils import Interval, print_banner
 
 class TestObservationOpportunity(unittest.TestCase):
     def test_observation_opportunity(self):
@@ -484,7 +484,7 @@ class TestObservationOpportunity(unittest.TestCase):
 
 if __name__ == '__main__':
     # terminal welcome message
-    print_welcome('Observation Opportunity Definitions Test')
+    print_banner('Observation Opportunity Definitions Test')
     
     # run tests
     unittest.main()

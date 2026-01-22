@@ -11,7 +11,7 @@ Requires: Unix-like operating system (Linux (Ubuntu, CentOS...), Mac), `python >
 
 The installation can be carried out in a conda environment using the below steps.
 
-`pip install setuptools` is required for Python 3.12 for the `distutils` package.
+> Note: `pip install setuptools` is required for Python 3.12 for the `distutils` package.
 
 1. Create and activate a new conda environment with python. Install `pip` in the environment.
 

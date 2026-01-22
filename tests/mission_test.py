@@ -9,7 +9,7 @@ from execsatm.events import GeophysicalEvent
 from execsatm.requirements import SinglePointSpatialRequirement, IntervalInterpolationRequirement, SpatialCoverageRequirement
 from execsatm.objectives import EventDrivenObjective, DefaultMissionObjective, MissionObjective
 from execsatm.mission import Mission
-from execsatm.utils import Interval, print_welcome
+from execsatm.utils import Interval, print_banner
 
 
 class TestMission(unittest.TestCase):
@@ -709,7 +709,7 @@ class TestMission(unittest.TestCase):
 
 if __name__ == '__main__':
     # terminal welcome message
-    print_welcome('Mission Definitions Test')
+    print_banner('Mission Definitions Test')
     
     # run tests
     unittest.main()

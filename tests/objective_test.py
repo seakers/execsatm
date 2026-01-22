@@ -4,7 +4,7 @@ from execsatm.attributes import TemporalRequirementAttributes
 from execsatm.events import GeophysicalEvent
 from execsatm.requirements import *
 from execsatm.objectives import DefaultMissionObjective, EventDrivenObjective
-from execsatm.utils import print_welcome
+from execsatm.utils import print_banner
 
 class TestDefaultObjectives(unittest.TestCase):
     def setUp(self):
@@ -436,7 +436,7 @@ class TestEventDrivenObjectives(unittest.TestCase):
 
 if __name__ == '__main__':
     # terminal welcome message
-    print_welcome('Mission Objective Definitions Test')
+    print_banner('Mission Objective Definitions Test')
     
     # run tests
     unittest.main()

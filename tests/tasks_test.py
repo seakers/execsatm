@@ -3,7 +3,7 @@ import unittest
 from execsatm.requirements import *
 from execsatm.tasks import *
 from execsatm.objectives import *
-from execsatm.utils import print_welcome
+from execsatm.utils import print_banner
 
 class AvailabilityRequirement(PerformanceRequirement):
     def __init__(self, start_time: float, end_time: float):
@@ -332,7 +332,7 @@ class TestGenericTasks(unittest.TestCase):
 
 if __name__ == '__main__':
     # terminal welcome message
-    print_welcome('Task Definitions Test')
+    print_banner('Task Definitions Test')
     
     # run tests
     unittest.main()

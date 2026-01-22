@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from execsatm.requirements import CapabilityPreferenceStrategies, ConstantValueRequirement, ExpDecayRequirement, ExpSaturationRequirement, ExplicitCapabilityRequirement, GaussianRequirement, GridSpatialRequirement, IntervalInterpolationRequirement, LogThresholdRequirement, MissionRequirement, MultiPointSpatialRequirement, PerformancePreferenceStrategies, RequirementTypes, CategoricalRequirement, SinglePointSpatialRequirement, SpatialPreferenceStrategies, StepsRequirement, TriangleRequirement
-from execsatm.utils import print_welcome
+from execsatm.utils import print_banner
 
 """
 ---------------------------------
@@ -1399,7 +1399,7 @@ class TestGridSpatialRequirement(unittest.TestCase):
 
 if __name__ == '__main__':
     # terminal welcome message
-    print_welcome('Mission Requirement Definition Test')
+    print_banner('Mission Requirement Definition Test')
     
     # run tests
     unittest.main()

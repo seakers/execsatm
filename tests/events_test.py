@@ -2,7 +2,7 @@ import unittest
 import uuid
 
 from execsatm.events import GeophysicalEvent
-from execsatm.utils import print_welcome
+from execsatm.utils import print_banner
 
 
 class TestGeophysicalEvent(unittest.TestCase):
@@ -91,7 +91,7 @@ class TestGeophysicalEvent(unittest.TestCase):
 
 if __name__ == '__main__':
     # terminal welcome message
-    print_welcome('Geophysical Event Definition Test')
+    print_banner('Geophysical Event Definition Test')
 
     # run tests
     unittest.main()
