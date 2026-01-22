@@ -12,5 +12,5 @@ setup(
     author_email='aguilaraj15@tamu.edu',
     packages=['execsatm'],
     scripts=[],
-    install_requires=['setuptools', 'numpy'] 
+    install_requires=['setuptools', 'numpy', 'pyparsing'] 
 )

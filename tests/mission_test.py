@@ -2,14 +2,14 @@ import unittest
 
 import numpy as np
 
-from chess3d.agents.planning.observations import ObservationOpportunity
-from chess3d.agents.planning.tasks import DefaultMissionTask, EventObservationTask
-from chess3d.mission.attributes import TemporalRequirementAttributes
-from chess3d.mission.events import GeophysicalEvent
-from chess3d.mission.requirements import SinglePointSpatialRequirement, IntervalInterpolationRequirement, SpatialCoverageRequirement
-from chess3d.mission.objectives import EventDrivenObjective, DefaultMissionObjective, MissionObjective
-from chess3d.mission.mission import Mission
-from chess3d.utils import Interval, print_welcome
+from execsatm.observations import ObservationOpportunity
+from execsatm.tasks import DefaultMissionTask, EventObservationTask
+from execsatm.attributes import TemporalRequirementAttributes
+from execsatm.events import GeophysicalEvent
+from execsatm.requirements import SinglePointSpatialRequirement, IntervalInterpolationRequirement, SpatialCoverageRequirement
+from execsatm.objectives import EventDrivenObjective, DefaultMissionObjective, MissionObjective
+from execsatm.mission import Mission
+from execsatm.utils import Interval, print_welcome
 
 
 class TestMission(unittest.TestCase):

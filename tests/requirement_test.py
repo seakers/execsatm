@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from chess3d.mission.requirements import CapabilityPreferenceStrategies, ConstantValueRequirement, ExpDecayRequirement, ExpSaturationRequirement, ExplicitCapabilityRequirement, GaussianRequirement, GridSpatialRequirement, IntervalInterpolationRequirement, LogThresholdRequirement, MissionRequirement, MultiPointSpatialRequirement, PerformancePreferenceStrategies, RequirementTypes, CategoricalRequirement, SinglePointSpatialRequirement, SpatialPreferenceStrategies, StepsRequirement, TriangleRequirement
-from chess3d.utils import print_welcome
+from execsatm.requirements import CapabilityPreferenceStrategies, ConstantValueRequirement, ExpDecayRequirement, ExpSaturationRequirement, ExplicitCapabilityRequirement, GaussianRequirement, GridSpatialRequirement, IntervalInterpolationRequirement, LogThresholdRequirement, MissionRequirement, MultiPointSpatialRequirement, PerformancePreferenceStrategies, RequirementTypes, CategoricalRequirement, SinglePointSpatialRequirement, SpatialPreferenceStrategies, StepsRequirement, TriangleRequirement
+from execsatm.utils import print_welcome
 
 """
 ---------------------------------

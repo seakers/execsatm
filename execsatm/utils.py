@@ -1,3 +1,4 @@
+import os
 import numpy as np 
 
 class Interval:
@@ -227,3 +228,13 @@ class EmptyInterval(Interval):
     def span(self) -> float:
         """ Returns the span of the interval. """
         return 0.0
+    
+def print_welcome(scenario_name = None) -> None:
+    os.system('cls' if os.name == 'nt' else 'clear')
+    out = "\n======================================================"
+    out += '\n  ______                _____      _______ __  __ \n|  ____|              / ____|  /\|__   __|  \/  |\n| |__  __  _____  ___| (___   /  \  | |  | \  / |\n|  __| \ \/ / _ \/ __|\___ \ / /\ \ | |  | |\/| |\n| |____ >  <  __/ (__ ____) / ____ \| |  | |  | |\n|______/_/\_\___|\___|_____/_/    \_\_|  |_|  |_| (v1.0)'
+    out += "\n======================================================"
+    out += '\n\tTexas A&M University - SEAK Lab ©'
+    out += "\n======================================================"
+    if scenario_name is not None: out += f"\nSCENARIO: {scenario_name}"
+    print(out)

@@ -1,7 +1,7 @@
 import unittest
 import uuid
 
-from execsatm.mission.events import GeophysicalEvent
+from execsatm.events import GeophysicalEvent
 from execsatm.utils import print_welcome
 
 

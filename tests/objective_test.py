@@ -1,10 +1,10 @@
 import unittest
 
-from chess3d.mission.attributes import TemporalRequirementAttributes
-from chess3d.mission.events import GeophysicalEvent
-from chess3d.mission.requirements import *
-from chess3d.mission.objectives import DefaultMissionObjective, EventDrivenObjective
-from chess3d.utils import print_welcome
+from execsatm.attributes import TemporalRequirementAttributes
+from execsatm.events import GeophysicalEvent
+from execsatm.requirements import *
+from execsatm.objectives import DefaultMissionObjective, EventDrivenObjective
+from execsatm.utils import print_welcome
 
 class TestDefaultObjectives(unittest.TestCase):
     def setUp(self):
