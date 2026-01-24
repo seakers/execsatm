@@ -200,6 +200,9 @@ class PerformanceRequirement(MissionRequirement):
         elif strategy == PerformancePreferenceStrategies.INTERVAL_INTERP.value:
             return IntervalInterpolationRequirement.from_dict(d)
         
+        elif strategy == PerformancePreferenceStrategies.DEMINISHING_RETURNS.value:
+            return DeminishingReturnsRequirement.from_dict(d)
+
         # Additional strategies can be implemented here
         raise NotImplementedError(f"Preference function for strategy '{strategy}' not yet supported.")
 

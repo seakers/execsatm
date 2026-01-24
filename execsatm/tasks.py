@@ -308,6 +308,17 @@ class EventObservationTask(GenericObservationTask):
             "event": self.event.to_dict() if self.event else None
         })
         return d
+    
+    @classmethod
+    def from_event(cls,
+                   parameter : str, 
+                   event : GeophysicalEvent,
+                  ) -> 'EventObservationTask':
+        """ Create an event observation task from a geophysical event. """
+        return cls(
+            parameter=parameter,
+            event=event
+        )
 
     @classmethod
     def from_dict(cls, task_dict: dict) -> 'EventObservationTask':
