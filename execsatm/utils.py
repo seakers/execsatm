@@ -79,7 +79,7 @@ class Interval:
         return Interval(left, right, left_open, right_open)
 
     def union(self, __other : 'Interval', extend : bool = False) -> 'Interval':
-        """ merges intervals and returns their union """
+        """ returns the union of this and another interval """
 
         if not isinstance(__other, Interval):
             raise TypeError(f'Cannot merge with object of type `{type(__other)}`.')
@@ -97,6 +97,32 @@ class Interval:
 
         # create a new interval object
         return Interval(left, right, left_open, right_open)
+    
+    def join(self, __other : 'Interval') -> None:
+        """ joins another interval into this interval """
+
+        if not isinstance(__other, Interval):
+            raise TypeError(f'Cannot merge with object of type `{type(__other)}`.')
+
+        # if the intervals do not overlap, return an empty interval
+        if not self.overlaps(__other) and not extend: return EmptyInterval()
+
+        # find the left and right bounds of the union
+        left = min(self.left, __other.left)
+        right = max(self.right, __other.right)
+
+        # check if the left and right bounds are open
+        left_open = self.left_open if left == self.left else __other.left_open
+        right_open = __other.right_open if right == __other.right else self.right_open
+
+        # update this interval's bounds
+        self.left = left
+        self.right = right
+        self.left_open = left_open
+        self.right_open = right_open
+
+        # return nothing
+        return
 
     def extend(self, x: float, open:bool=False) -> None:
         """ extends bounds of interval to include new value `x` """
