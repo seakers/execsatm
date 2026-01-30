@@ -62,7 +62,7 @@ class GeophysicalEvent:
 
     def is_active(self, t: float) -> bool:
         """Check if the event is active at time t."""
-        return self.t_start <= t <= (self.t_start + self.d_exp)
+        return t in self.availability
     
     def is_expired(self, t: float) -> bool:
         """Check if the event is expired at time t."""

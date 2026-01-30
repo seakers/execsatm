@@ -5,14 +5,17 @@ class Interval:
     """ Represents an linear interval set of real numbers """
 
     def __init__(self, left:float, right:float, left_open:bool=False, right_open:bool=False):
-        self.left : float = left
-        self.left_open : bool = left_open if not np.isneginf(left) else True
+        try:
+            self.left : float = left
+            self.left_open : bool = left_open if not np.isneginf(left) else True
 
-        self.right : float = right
-        self.right_open : bool = right_open if not np.isinf(right) else True
+            self.right : float = right
+            self.right_open : bool = right_open if not np.isinf(right) else True
 
-        if self.right < self.left:
-            raise ValueError('The right side of interval must be later than the left side of the interval.')
+            if self.right < self.left:
+                raise ValueError('The right side of interval must be later than the left side of the interval.')
+        except Exception as e:
+            raise e
 
     def __contains__(self, x: float) -> bool:
         """ checks if `x` is contained in the interval """

@@ -55,7 +55,7 @@ class MissionRequirement(ABC):
         if not isinstance(result, Number):
             raise TypeError(f"Expected a numeric return value, got {type(result).__name__}")
 
-        if not (0.0 <= result <= 1.0):
+        if not (0.0 - 1e-6 <= result <= 1.0 + 1e-6):  # allow small numerical tolerance
             raise ValueError(f"Return value {result} is not in [0, 1]")
 
         # Return the preference value

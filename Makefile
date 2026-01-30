@@ -1,4 +1,4 @@
-PROJECT := chess3d
+PROJECT := execsatm
 
 .DEFAULT_GOAL := all
 
