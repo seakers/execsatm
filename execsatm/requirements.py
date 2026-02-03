@@ -100,6 +100,14 @@ class MissionRequirement(ABC):
         
         raise NotImplementedError(f"Requirement type '{req_type}' not yet supported.")
     
+    @abstractmethod
+    def __eq__(self, other):
+        """Check equality of two requirements."""
+        assert isinstance(other, MissionRequirement), "Can only compare MissionRequirement instances"
+        
+        # return self.to_dict() == other.to_dict()
+        comp_attrs = ['req_type', 'attribute', 'id']
+        return all(getattr(self, attr) ==  getattr(other, attr) for attr in comp_attrs)
 """
 ------------------------------------
 PERFORMANCE REQUIREMENT DEFINITIONS
@@ -206,6 +214,12 @@ class PerformanceRequirement(MissionRequirement):
         # Additional strategies can be implemented here
         raise NotImplementedError(f"Preference function for strategy '{strategy}' not yet supported.")
 
+    @abstractmethod
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, PerformanceRequirement):
+            return self.strategy == other.strategy
+        return False
+
 class CategoricalRequirement(PerformanceRequirement):
     def __init__(self, 
                  attribute : str, 
@@ -261,7 +275,15 @@ class CategoricalRequirement(PerformanceRequirement):
         
         # initiate requirement
         return cls(attribute, preferences, id)
-
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, CategoricalRequirement):
+            for key,value in self.preferences.items():
+                if key not in other.preferences or other.preferences[key] != value:
+                    return False
+            return True
+        return False
+    
 class ConstantValueRequirement(PerformanceRequirement):
     def __init__(self, 
                  attribute : str,
@@ -312,6 +334,11 @@ class ConstantValueRequirement(PerformanceRequirement):
 
         # initiate requirement
         return cls(attribute, value, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, ConstantValueRequirement):
+            return self.value == other.value
+        return False
     
 class ExpSaturationRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -367,6 +394,11 @@ class ExpSaturationRequirement(PerformanceRequirement):
 
         # initiate requirement
         return cls(attribute, sat_rate, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, ExpSaturationRequirement):
+            return abs(self.sat_rate - other.sat_rate) < 1e-6
+        return False
     
 class LogThresholdRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -428,6 +460,12 @@ class LogThresholdRequirement(PerformanceRequirement):
 
         # initiate requirement
         return cls(attribute, slope, threshold, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, LogThresholdRequirement):
+            return (abs(self.slope - other.slope) < 1e-6 and
+                    abs(self.threshold - other.threshold) < 1e-6)
+        return False
 
 class DeminishingReturnsRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -493,6 +531,11 @@ class DeminishingReturnsRequirement(PerformanceRequirement):
 
         # initiate requirement
         return cls(attribute, slope, threshold, id)
+    
+    def __eq__(self, other):
+        return super().__eq__(other) and isinstance(other, DeminishingReturnsRequirement) and \
+                (abs(self.slope - other.slope) < 1e-6 
+                 and abs(self.threshold - other.threshold) < 1e-6)    
 
 class ExpDecayRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -550,6 +593,11 @@ class ExpDecayRequirement(PerformanceRequirement):
 
         # initiate requirement
         return cls(attribute, decay_rate, id)
+
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, ExpDecayRequirement):
+            return abs(self.decay_rate - other.decay_rate) < 1e-6
+        return False
 
 class GaussianRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -611,6 +659,12 @@ class GaussianRequirement(PerformanceRequirement):
         # initiate requirement
         return cls(attribute, mean, stddev, id)
 
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, GaussianRequirement):
+            return (abs(self.mean - other.mean) < 1e-6 and
+                    abs(self.stddev - other.stddev) < 1e-6)
+        return False
+
 class TriangleRequirement(PerformanceRequirement):
     def __init__(self, 
                  attribute : str, 
@@ -670,6 +724,12 @@ class TriangleRequirement(PerformanceRequirement):
 
         # initiate requirement
         return cls(attribute, reference, width, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, TriangleRequirement):
+            return (abs(self.reference - other.reference) < 1e-6 and
+                    abs(self.width - other.width) < 1e-6)
+        return False
 
 class StepsRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -741,6 +801,20 @@ class StepsRequirement(PerformanceRequirement):
 
         # initiate requirement
         return cls(attribute, thresholds, scores, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, StepsRequirement):
+            if len(self.thresholds) != len(other.thresholds):
+                return False
+            if len(self.scores) != len(other.scores):
+                return False
+
+            matches_thresholds = all(abs(a - b) < 1e-6 for a, b in zip(self.thresholds, other.thresholds))
+            matches_scores = all(abs(a - b) < 1e-6 for a, b in zip(self.scores, other.scores))
+
+            return matches_thresholds and matches_scores
+        
+        return False
 
 class IntervalInterpolationRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -825,6 +899,20 @@ class IntervalInterpolationRequirement(PerformanceRequirement):
 
         # initiate requirement
         return cls(attribute, thresholds, scores, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, IntervalInterpolationRequirement):
+            if len(self.thresholds) != len(other.thresholds):
+                return False
+            if len(self.scores) != len(other.scores):
+                return False
+
+            matches_thresholds = all(abs(a - b) < 1e-6 for a, b in zip(self.thresholds, other.thresholds))
+            matches_scores = all(abs(a - b) < 1e-6 for a, b in zip(self.scores, other.scores))
+
+            return matches_thresholds and matches_scores
+        
+        return False
 
 """
 -----------------------------
@@ -880,6 +968,11 @@ class CapabilityRequirement(MissionRequirement):
         
         # Additional strategies can be implemented here
         raise NotImplementedError(f"Preference function for strategy '{strategy}' not yet supported.")
+
+    def __eq__(self, other : 'MissionRequirement') -> bool:
+        if super().__eq__(other) and isinstance(other, CapabilityRequirement):
+            return self.strategy == other.strategy
+        return False
 
 class ExplicitCapabilityRequirement(CapabilityRequirement):
     def __init__(self, 
@@ -940,6 +1033,11 @@ class ExplicitCapabilityRequirement(CapabilityRequirement):
 
         # initiate requirement
         return cls(attribute, valid_values, id)
+    
+    def __eq__(self, other):
+        return super().__eq__(other) \
+            and isinstance(other, ExplicitCapabilityRequirement) and \
+               self.valid_values == other.valid_values
 
 """
 ---------------------------------
@@ -1021,6 +1119,12 @@ class SpatialCoverageRequirement(MissionRequirement):
         # Additional strategies can be implemented here
         raise NotImplementedError(f"Preference function for strategy '{strategy}' not yet supported.")
     
+    @abstractmethod
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, SpatialCoverageRequirement):
+            return self.strategy == other.strategy
+        return False
+
 class SinglePointSpatialRequirement(SpatialCoverageRequirement):
     def __init__(self, 
                  target : Union[Tuple, list],
@@ -1111,6 +1215,12 @@ class SinglePointSpatialRequirement(SpatialCoverageRequirement):
     def __repr__(self):
         """String representation of the single point spatial requirement."""
         return super().__repr__()[:-1] + f", target={self.target[2],self.target[3]})"
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, SinglePointSpatialRequirement):
+            matchin_targets = all(abs(a - b) < 1e-6 for a, b in zip(self.target, other.target))
+            return (matchin_targets and abs(self.distance_threshold - other.distance_threshold) < 1e-6)
+        return False
     
 class MultiPointSpatialRequirement(SpatialCoverageRequirement):
     def __init__(self, 
@@ -1203,6 +1313,18 @@ class MultiPointSpatialRequirement(SpatialCoverageRequirement):
         
         # initiate requirement
         return cls(targets, distance_threshold, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, MultiPointSpatialRequirement):
+            if len(self.targets) != len(other.targets):
+                return False
+            matching_targets = all(
+                any(all(abs(a - b) < 1e-6 for a, b in zip(self_target, other_target)) 
+                    for other_target in other.targets)
+                for self_target in self.targets
+            )
+            return (matching_targets and abs(self.distance_threshold - other.distance_threshold) < 1e-6)
+        return False
 
 class GridSpatialRequirement(SpatialCoverageRequirement):
     # TODO load grid definitions from file or external source and evaluate accordingly
@@ -1283,3 +1405,10 @@ class GridSpatialRequirement(SpatialCoverageRequirement):
 
         # initiate requirement
         return cls(grid_name, grid_index, grid_size, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, GridSpatialRequirement):
+            return (self.grid_name == other.grid_name and
+                    self.grid_index == other.grid_index and
+                    self.grid_size == other.grid_size)
+        return False

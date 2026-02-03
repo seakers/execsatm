@@ -94,9 +94,22 @@ class MissionObjective(ABC):
     
     def __eq__(self, other):
         """Check equality of two objectives."""
-        if not isinstance(other, MissionObjective):
-            return False
-        return self.to_dict() == other.to_dict()
+        assert isinstance(other, MissionObjective), "Can only compare MissionObjective instances"
+        
+        # return self.to_dict() == other.to_dict()
+
+        comp_attrs = ['objective_type', 'parameter', 'id']
+        if all(getattr(self, attr) ==  getattr(other, attr) for attr in comp_attrs):
+            # Check requirements
+            if len(self.requirements) != len(other.requirements):
+                return False
+            for attr, req in self.requirements.items():
+                if attr not in other.requirements:
+                    return False
+                if req != other.requirements[attr]:
+                    return False
+            return True
+        return False
     
     def __hash__(self):
         return hash(self.id)
@@ -104,7 +117,7 @@ class MissionObjective(ABC):
 class DefaultMissionObjective(MissionObjective):
     def __init__(self, 
                  parameter: str, 
-                 requirements: list = [], 
+                 requirements: List[MissionRequirement] = [], 
                  id : str = None
                  ):
         """ 

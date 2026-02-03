@@ -194,9 +194,19 @@ class Mission:
             weights=weights
         )
     
-    def __eq__(self, value : 'Mission') -> bool:
-        assert isinstance(value, Mission), "Can only compare Mission instances"
-        return self.to_dict() == value.to_dict()
+    def __eq__(self, other : 'Mission') -> bool:
+        assert isinstance(other, Mission), "Can only compare Mission instances"
+        return self.to_dict() == other.to_dict()
+
+        # if self.name == other.name:
+        #     if len(self.objectives) == len(other.objectives):
+        #         # compare weights
+        #         ids_self = sorted([obj.id for obj in self.objectives])
+        #         ids_value = sorted([obj.id for obj in other.objectives])
+
+        #         if len(ids_self) == len(ids_value):
+                    
+        # return False
     
     def __hash__(self):
         ids = [obj.id for obj in self.objectives]

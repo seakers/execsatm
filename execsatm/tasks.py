@@ -122,7 +122,20 @@ class GenericObservationTask(ABC):
     def __eq__(self, other: object) -> bool:
         """ Check if two tasks are equal. """
         assert isinstance(other, GenericObservationTask), "Can only compare GenericObservationTask objects."
+        
         return self.to_dict() == other.to_dict()
+
+        comp_attrs = [
+            'task_type',
+            'parameter',
+            'location',
+            'availability',
+            'priority',
+            'objective',
+            'id',
+        ]
+
+        return all([getattr(self, attr) ==  getattr(other, attr) for attr in comp_attrs])
 
     def __hash__(self):
         return hash(self.id)
