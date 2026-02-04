@@ -76,14 +76,18 @@ class MissionRequirement(ABC):
     
     def to_dict(self) -> Dict[str, Union[str, float]]:
         """Convert the measurement requirement to a dictionary."""
-        return dict(self.__dict__)
+        return {
+            "req_type": self.req_type,
+            "attribute": self.attribute,
+            "id": self.id
+        }
     
     @classmethod
     def from_dict(cls, d: Dict[str, Union[str, float]]) -> 'MissionRequirement':
         """Create a measurement requirement from a dictionary."""
 
         # validate input dictionary
-        required_keys = ['req_type', 'attribute']
+        required_keys = ['req_type', 'attribute', 'id']
         assert all(key in d for key in required_keys), \
             f"Dictionary must contain the keys: {required_keys}"
         

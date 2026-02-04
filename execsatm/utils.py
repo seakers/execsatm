@@ -150,6 +150,14 @@ class Interval:
         else:
             raise ValueError('Cannot update left bound to a value greater than the right bound.')
         
+    def open_left(self) -> None:
+        """ opens the left bound of the interval """
+        self.left_open = True
+
+    def close_left(self) -> None:
+        """ closes the left bound of the interval """
+        self.left_open = False
+        
     def update_right(self, right: float, open: bool = False) -> None:
         """ updates the right bound of the interval """
         if right >= self.left:
@@ -157,6 +165,14 @@ class Interval:
             self.right_open = open
         else:
             raise ValueError('Cannot update right bound to a value less than the left bound.')
+        
+    def open_right(self) -> None:
+        """ opens the right bound of the interval """
+        self.right_open = True
+
+    def close_right(self) -> None:
+        """ closes the right bound of the interval """
+        self.right_open = False
     
     def span(self) -> float:
         """ returns the span of the interval """       
