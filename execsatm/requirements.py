@@ -87,7 +87,7 @@ class MissionRequirement(ABC):
         """Create a measurement requirement from a dictionary."""
 
         # validate input dictionary
-        required_keys = ['req_type', 'attribute', 'id']
+        required_keys = ['req_type', 'attribute']
         assert all(key in d for key in required_keys), \
             f"Dictionary must contain the keys: {required_keys}"
         
@@ -223,6 +223,12 @@ class PerformanceRequirement(MissionRequirement):
         if super().__eq__(other) and isinstance(other, PerformanceRequirement):
             return self.strategy == other.strategy
         return False
+    
+    @abstractmethod
+    def to_dict(self):
+        d = super().to_dict()
+        d['strategy'] = self.strategy
+        return d
 
 class CategoricalRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -288,6 +294,11 @@ class CategoricalRequirement(PerformanceRequirement):
             return True
         return False
     
+    def to_dict(self):
+        d = super().to_dict()
+        d['preferences'] = dict(self.preferences)
+        return d
+    
 class ConstantValueRequirement(PerformanceRequirement):
     def __init__(self, 
                  attribute : str,
@@ -343,6 +354,11 @@ class ConstantValueRequirement(PerformanceRequirement):
         if super().__eq__(other) and isinstance(other, ConstantValueRequirement):
             return self.value == other.value
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['value'] = self.value
+        return d
     
 class ExpSaturationRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -403,6 +419,11 @@ class ExpSaturationRequirement(PerformanceRequirement):
         if super().__eq__(other) and isinstance(other, ExpSaturationRequirement):
             return abs(self.sat_rate - other.sat_rate) < 1e-6
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['sat_rate'] = self.sat_rate
+        return d
     
 class LogThresholdRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -470,6 +491,12 @@ class LogThresholdRequirement(PerformanceRequirement):
             return (abs(self.slope - other.slope) < 1e-6 and
                     abs(self.threshold - other.threshold) < 1e-6)
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['slope'] = self.slope
+        d['threshold'] = self.threshold
+        return d
 
 class DeminishingReturnsRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -540,6 +567,12 @@ class DeminishingReturnsRequirement(PerformanceRequirement):
         return super().__eq__(other) and isinstance(other, DeminishingReturnsRequirement) and \
                 (abs(self.slope - other.slope) < 1e-6 
                  and abs(self.threshold - other.threshold) < 1e-6)    
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['slope'] = self.slope
+        d['threshold'] = self.threshold
+        return d
 
 class ExpDecayRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -602,6 +635,11 @@ class ExpDecayRequirement(PerformanceRequirement):
         if super().__eq__(other) and isinstance(other, ExpDecayRequirement):
             return abs(self.decay_rate - other.decay_rate) < 1e-6
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['decay_rate'] = self.decay_rate
+        return d
 
 class GaussianRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -668,6 +706,12 @@ class GaussianRequirement(PerformanceRequirement):
             return (abs(self.mean - other.mean) < 1e-6 and
                     abs(self.stddev - other.stddev) < 1e-6)
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['mean'] = self.mean
+        d['stddev'] = self.stddev
+        return d
 
 class TriangleRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -734,6 +778,12 @@ class TriangleRequirement(PerformanceRequirement):
             return (abs(self.reference - other.reference) < 1e-6 and
                     abs(self.width - other.width) < 1e-6)
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['reference'] = self.reference
+        d['width'] = self.width
+        return d
 
 class StepsRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -819,6 +869,12 @@ class StepsRequirement(PerformanceRequirement):
             return matches_thresholds and matches_scores
         
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['thresholds'] = list(self.thresholds)
+        d['scores'] = list(self.scores)
+        return d
 
 class IntervalInterpolationRequirement(PerformanceRequirement):
     def __init__(self, 
@@ -917,6 +973,12 @@ class IntervalInterpolationRequirement(PerformanceRequirement):
             return matches_thresholds and matches_scores
         
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['thresholds'] = list(self.thresholds)
+        d['scores'] = list(self.scores)
+        return d
 
 """
 -----------------------------
@@ -977,6 +1039,11 @@ class CapabilityRequirement(MissionRequirement):
         if super().__eq__(other) and isinstance(other, CapabilityRequirement):
             return self.strategy == other.strategy
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d["strategy"] = self.strategy
+        return d
 
 class ExplicitCapabilityRequirement(CapabilityRequirement):
     def __init__(self, 
@@ -1016,7 +1083,7 @@ class ExplicitCapabilityRequirement(CapabilityRequirement):
     
     def to_dict(self):
         d = super().to_dict()
-        d.update({"valid_values": sorted(self.valid_values)})
+        d["valid_values"] = sorted(self.valid_values)
         return d
 
     @classmethod
@@ -1128,6 +1195,12 @@ class SpatialCoverageRequirement(MissionRequirement):
         if super().__eq__(other) and isinstance(other, SpatialCoverageRequirement):
             return self.strategy == other.strategy
         return False
+    
+    @abstractmethod
+    def to_dict(self):
+        d = super().to_dict()
+        d["strategy"] = self.strategy
+        return d
 
 class SinglePointSpatialRequirement(SpatialCoverageRequirement):
     def __init__(self, 
@@ -1225,6 +1298,12 @@ class SinglePointSpatialRequirement(SpatialCoverageRequirement):
             matchin_targets = all(abs(a - b) < 1e-6 for a, b in zip(self.target, other.target))
             return (matchin_targets and abs(self.distance_threshold - other.distance_threshold) < 1e-6)
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['target'] = tuple(self.target)
+        d['distance_threshold'] = self.distance_threshold
+        return d
     
 class MultiPointSpatialRequirement(SpatialCoverageRequirement):
     def __init__(self, 
@@ -1329,6 +1408,12 @@ class MultiPointSpatialRequirement(SpatialCoverageRequirement):
             )
             return (matching_targets and abs(self.distance_threshold - other.distance_threshold) < 1e-6)
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['targets'] = [tuple(target) for target in self.targets]
+        d['distance_threshold'] = self.distance_threshold
+        return d
 
 class GridSpatialRequirement(SpatialCoverageRequirement):
     # TODO load grid definitions from file or external source and evaluate accordingly
@@ -1416,3 +1501,10 @@ class GridSpatialRequirement(SpatialCoverageRequirement):
                     self.grid_index == other.grid_index and
                     self.grid_size == other.grid_size)
         return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['grid_name'] = self.grid_name
+        d['grid_index'] = self.grid_index
+        d['grid_size'] = self.grid_size
+        return d
