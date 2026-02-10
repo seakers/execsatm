@@ -97,7 +97,7 @@ class ObservationOpportunity:
         extras_part = ";".join(extras)
 
         # Create canonical name string
-        name = f"{parent_part}|{interval_part}|{extras_part}"
+        name = f"{parent_part}|{extras_part}|{interval_part}"
 
         # Return deterministic UUID derived from name
         return str(uuid.uuid5(OBS_OPPORTUNITY_NAMESPACE, name))
