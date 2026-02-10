@@ -5,17 +5,25 @@ class Interval:
     """ Represents an linear interval set of real numbers """
 
     def __init__(self, left:float, right:float, left_open:bool=False, right_open:bool=False):
-        try:
-            self.left : float = left
-            self.left_open : bool = left_open if not np.isneginf(left) else True
+        # validate inputs
+        if not isinstance(left, (float, int)) and not np.isscalar(left):
+            raise AttributeError(f'`left` must be of type `float` or type `int`. is of type {type(left)}.')
+        if not isinstance(right, (float, int)) and not np.isscalar(right):
+            raise AttributeError(f'`right` must be of type `float` or type `int`. is of type {type(right)}.')
+        if not isinstance(left_open, bool):
+            raise AttributeError(f'`left_open` must be of type `bool`. is of type {type(left_open)}.')
+        if not isinstance(right_open, bool):
+            raise AttributeError(f'`right_open` must be of type `bool`. is of type {type(right_open)}.')
 
-            self.right : float = right
-            self.right_open : bool = right_open if not np.isinf(right) else True
+        # assign attributes
+        self.left : float = left
+        self.left_open : bool = left_open if not np.isneginf(left) else True
 
-            if self.right < self.left:
-                raise ValueError('The right side of interval must be later than the left side of the interval.')
-        except Exception as e:
-            raise e
+        self.right : float = right
+        self.right_open : bool = right_open if not np.isinf(right) else True
+
+        if self.right < self.left:
+            raise ValueError('The right side of interval must be later than the left side of the interval.')
 
     def __contains__(self, x: float) -> bool:
         """ checks if `x` is contained in the interval """
@@ -46,14 +54,26 @@ class Interval:
                 or __other.left in self
                 or __other.right in self)
 
-    def is_subset(self, __other: 'Interval') -> bool:
+    def is_subset(self, _other: 'Interval') -> bool:
         """ checks if this interval is a subset of another """
-        if not isinstance(__other, Interval):
-            raise TypeError(f'Cannot check subset with object of type `{type(__other)}`.')
+        if not isinstance(_other, Interval):
+            raise TypeError(f'Cannot check subset with object of type `{type(_other)}`.')
 
-        return (__other.left <= self.left and self.right <= __other.right
-                and (self.left_open or not __other.left_open)
-                and (self.right_open or not __other.right_open))
+        if _other.left_open and self.left <= _other.left:                
+            return False
+        if not _other.left_open and self.left < _other.left:
+            return False
+            
+        if _other.right_open and _other.right <= self.right:
+            return False
+        if not _other.right_open and _other.right < self.right:
+            return False
+            
+        return True
+
+        # return (__other.left <= self.left and self.right <= __other.right
+        #         and (self.left_open or not __other.left_open)
+        #         and (self.right_open or not __other.right_open))
 
     def intersection(self, __other : 'Interval') -> 'Interval':
         """ returns the intersect of two intervals """

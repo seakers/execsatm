@@ -3,6 +3,7 @@ import math
 from typing import List, Tuple, Union
 import uuid
 
+from functools import reduce
 import numpy as np
 
 from execsatm.tasks import GenericObservationTask
@@ -48,7 +49,7 @@ class ObservationOpportunity:
             assert all([accessibility.overlaps(task.availability) 
                         for task in tasks 
                         if isinstance(task, GenericObservationTask)]),\
-                "Accesibility interval must be within the parent tasks' availability interval."
+                "Accessibility interval must be within the parent tasks' availability interval."
         else:
             assert accessibility.overlaps(tasks.availability), \
                 "Accessibility interval must be within the parent task's availability interval."
@@ -100,6 +101,10 @@ class ObservationOpportunity:
 
         # Return deterministic UUID derived from name
         return str(uuid.uuid5(OBS_OPPORTUNITY_NAMESPACE, name))
+    
+    def regenerate_id(self) -> None:
+        """ Resets the ID of the observation opportunity. """
+        self.id = self.generate_id(self.tasks, self.instrument_name, self.accessibility)
     
     def copy(self) -> 'ObservationOpportunity':
         """ Create a deep copy of the task. """
@@ -162,29 +167,44 @@ class ObservationOpportunity:
         # Calculate accessibility overlap
         accessibility_overlap : Interval = self.accessibility.intersection(other.accessibility)
 
-        # If accessibility time windows are not allowed to be extended, we cannot merge the tasks
-        if accessibility_overlap.is_empty() and must_overlap: return accessibility_overlap, np.NaN
+        # check if accessibility intervals would need to be extended
+        needs_extension : bool = accessibility_overlap.is_empty()
+
+        # check if accessibility time windows are not allowed to be extended and is needed
+        if needs_extension and must_overlap: 
+            # we cannot merge the tasks; return invalid time requirements
+            return accessibility_overlap, np.NaN
 
         # Determine which observation starts first
-        preceeding_obs, proceeding_obs = sorted([self, other], key=lambda t: t.accessibility.left)
+        preceeding_obs, proceeding_obs = sorted([self, other], key=lambda t: (t.accessibility.left, t.accessibility.span()))
 
         # Check if accesibility has any overlap
-        if not accessibility_overlap.is_empty():  # There is an overlap between the tasks' availability
-            # Use tasks' accessibility and duration requirements to find new accessibility bounds
-            accessibility_start = max(preceeding_obs.accessibility.left, 
-                                        min(proceeding_obs.accessibility.left + proceeding_obs.min_duration - preceeding_obs.min_duration,
-                                            proceeding_obs.accessibility.left)
-                                    )
-            accessibility_end   = min(preceeding_obs.accessibility.right,
-                                        max(proceeding_obs.accessibility.right - proceeding_obs.min_duration + preceeding_obs.min_duration,
-                                            proceeding_obs.accessibility.right)
-                                    )
+        if not needs_extension:  # There is an overlap between the tasks' availability
             
-            # Merge accessibility
-            merged_accessibility = Interval(accessibility_start, accessibility_end) if accessibility_start <= accessibility_end else EmptyInterval()
+            # Check if either accessibility is fully contained within the other
+            if proceeding_obs.accessibility.is_subset(preceeding_obs.accessibility):
+                # keep preceeding_obs accessibility and duration requirements
+                merged_accessibility = preceeding_obs.accessibility.copy()
+                min_duration_req = preceeding_obs.min_duration
 
-            # Calculate new observation duration requirement
-            min_duration_req = max(preceeding_obs.min_duration, proceeding_obs.min_duration)
+            elif preceeding_obs.accessibility.is_subset(proceeding_obs.accessibility):
+                # keep proceeding_obs accessibility and duration requirements
+                merged_accessibility = proceeding_obs.accessibility.copy()
+                min_duration_req = proceeding_obs.min_duration
+
+            else:
+            
+                # Calculate new observation duration requirement
+                min_duration_req = max(preceeding_obs.min_duration, proceeding_obs.min_duration)
+                
+                # Use tasks' accessibility and duration requirements to find new accessibility bounds
+                accessibility_start = min(preceeding_obs.accessibility.right - min_duration_req, 
+                                        proceeding_obs.accessibility.left)
+                accessibility_end   = max(preceeding_obs.accessibility.right,
+                                        proceeding_obs.accessibility.left + min_duration_req)
+
+                # Merge accessibility
+                merged_accessibility = Interval(accessibility_start, accessibility_end) if accessibility_start <= accessibility_end else EmptyInterval()
         
         else: # There is no overlap between the tasks' availability; we can only merge by extending the accessibility window
             # Find new accessibility bounds
@@ -196,6 +216,9 @@ class ObservationOpportunity:
 
             # Calculate new observation duration requirement
             min_duration_req = merged_accessibility.span()
+
+        assert min_duration_req >= max(preceeding_obs.min_duration, proceeding_obs.min_duration),\
+                "Calculated minimum duration requirement does not satisfy parent observation opportunities' minimum duration requirements."
 
         # Return Time Requirements
         return merged_accessibility, min_duration_req
@@ -217,29 +240,50 @@ class ObservationOpportunity:
         assert max_duration > 0.0, "`max_duration` must be positive."
         
         # Calculate slew angles overlap
-        merged_slew_angles : Interval = self.slew_angles.intersection(other.slew_angles) 
         slew_angles_overlap : bool = self.slew_angles.overlaps(other.slew_angles)
 
         # Calculate accessibility overlap and duration requirements
         merged_accessibility, min_duration_req = self._calc_time_requirements(other, must_overlap)
 
         # Gather joint observation targets
-        my_targets = set(self.get_location())
-        other_targets = set(other.get_location())
-        location_overlap : bool = len(my_targets.intersection(other_targets)) > 0
+        # my_targets = set(self.get_location())
+        # other_targets = set(other.get_location())
+        # location_overlap : bool = len(my_targets.intersection(other_targets)) > 0
+
+        # merge task accessibilities
+        task_availabilities : List[Interval] = [task.availability for task in self.tasks.union(other.tasks)]
+        merged_task_availability : Interval = reduce(lambda a, b: a.intersection(b), task_availabilities)
+        
+        # check if merged accessibility is within the intersection of the parent tasks' availability intervals
+        tasks_are_available : bool = not merged_task_availability.is_empty()
+        tasks_are_accessible : bool = tasks_are_available and merged_accessibility.is_subset(merged_task_availability)
 
         # Define necessary merge conditions
         merge_conditions = [
-                other is not self,                                  # not the same observation opportunity
-                self.instrument_name == other.instrument_name,      # same instrument
-                min_duration_req <= max_duration,                   # duration requirements do not exceed maximum allowed duration
-                not math.isnan(min_duration_req),                   # joint minimum duration requirements is valid
-                min_duration_req <= merged_accessibility.span(),    # accessibility window encompasses the duration requirements
-                # and not merged_slew_angles.is_empty()               # slew angles overlap
-                slew_angles_overlap,                                # slew angles overlap
-                not merged_accessibility.is_empty(),                # there exist a valid joint accessibility window 
-                # and not self.is_mutually_exclusive(other_task)      # TODO tasks with common parent tasks cannot be merged
-                # not location_overlap                                # tasks do not observe the same target(s)
+                # not the same observation opportunity
+                other is not self,
+                # same instrument      
+                self.instrument_name == other.instrument_name,
+                # duration requirements do not exceed maximum allowed duration
+                min_duration_req <= max_duration,
+                # joint minimum duration requirements is valid
+                not math.isnan(min_duration_req),
+                # accessibility window encompasses the duration requirements
+                min_duration_req <= merged_accessibility.span(),
+                # slew angles overlap
+                slew_angles_overlap,
+                # there exist a valid joint accessibility window 
+                not merged_accessibility.is_empty(),
+                merged_accessibility.left >= 0.0,
+                merged_accessibility.right >= 0.0,
+                # TODO tasks with common parent tasks cannot be merged?
+                # not self.is_mutually_exclusive(other_task),
+                # tasks do not observe the same target(s)
+                # not location_overlap,
+                # there exists overlap between the tasks' availability intervals
+                tasks_are_available,
+                # there merged accessibility is within the intersection of the parent tasks' availability intervals
+                tasks_are_accessible
         ]   
 
         # Return if merge can occur
@@ -266,6 +310,8 @@ class ObservationOpportunity:
 
             # Calculate accessibility overlap and duration requirements
             merged_accessibility, min_duration_req = self._calc_time_requirements(other, must_overlap)
+
+            # Validate merged observation opportunity parameters
             assert isinstance(merged_accessibility, Interval), "merged accessibility is not an Interval."
             assert isinstance(min_duration_req, (float,int)), "minimum duration requirement is not a number."
             assert not merged_accessibility.is_empty(), "joint observation opportunity availability is empty."
@@ -279,9 +325,13 @@ class ObservationOpportunity:
         
             # Return merged observation opportunity
             # TODO check if we need to generate a new ID here. Currently makes a new id based on parent tasks and accessibility
-            return ObservationOpportunity(merged_parent_tasks, self.instrument_name, merged_accessibility, min_duration_req, merged_slew_angles) 
-        
+            try:
+                return ObservationOpportunity(merged_parent_tasks, self.instrument_name, merged_accessibility, min_duration_req, merged_slew_angles, id=self.id) 
+            except AssertionError as e:
+                raise AssertionError(f"Cannot merge observation opportunities; {e}")
+
         except AssertionError as e:
+            x = self.can_merge(other, must_overlap, max_duration) # debug breakpoint
             raise AssertionError(f"Cannot merge observation opportunities; {e}")
 
     def __repr__(self):
