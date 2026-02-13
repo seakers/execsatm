@@ -17,10 +17,10 @@ class Interval:
 
         # assign attributes
         self.left : float = left
-        self.left_open : bool = left_open if not np.isneginf(left) else True
+        self.left_open : bool = left_open
 
         self.right : float = right
-        self.right_open : bool = right_open if not np.isinf(right) else True
+        self.right_open : bool = right_open
 
         if self.right < self.left:
             raise ValueError('The right side of interval must be later than the left side of the interval.')
