@@ -14,6 +14,8 @@ class Interval:
             raise AttributeError(f'`left_open` must be of type `bool`. is of type {type(left_open)}.')
         if not isinstance(right_open, bool):
             raise AttributeError(f'`right_open` must be of type `bool`. is of type {type(right_open)}.')
+        if left > right:
+            raise ValueError('The right side of interval must be later than the left side of the interval.')
 
         # assign attributes
         self.left : float = left
@@ -22,8 +24,6 @@ class Interval:
         self.right : float = right
         self.right_open : bool = right_open
 
-        if self.right < self.left:
-            raise ValueError('The right side of interval must be later than the left side of the interval.')
 
     def __contains__(self, x: float) -> bool:
         """ checks if `x` is contained in the interval """
