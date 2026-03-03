@@ -88,7 +88,8 @@ class Mission:
         # TODO Allow for more complex relationships using Knowledge Graphs or other methods. Move to science module?
         
         # Validate task type
-        assert isinstance(task, GenericObservationTask), "Task must be an instance of `GenericObservationTask`"
+        assert isinstance(task, GenericObservationTask), \
+            "Task must be an instance of `GenericObservationTask`"
 
         # initiate objective-to-task relevance mapping
         obj_relevances = dict()
@@ -96,7 +97,7 @@ class Mission:
         # Check if task has a defined objective
         if task.objective is None:
             # No specific objective; relate based on parameter matching
-            for obj in self.objectives:                
+            for obj in self.objectives:        
                 if obj.parameter == task.parameter:
                     if (isinstance(task, DefaultMissionTask) and isinstance(obj, DefaultMissionObjective)) or \
                        (isinstance(task, EventObservationTask) and isinstance(obj, EventDrivenObjective)):
