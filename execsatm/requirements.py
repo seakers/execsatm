@@ -2,8 +2,8 @@ from enum import Enum
 from numbers import Number
 import uuid
 import numpy as np
-from typing import Any, Dict, List, Set, Tuple, Union
-from pyparsing import ABC, Tuple, abstractmethod
+from typing import Any, Dict, List, Set, Tuple, Union, Tuple
+from pyparsing import ABC, abstractmethod
 
 """
 ---------------------------------
