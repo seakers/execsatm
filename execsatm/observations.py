@@ -53,7 +53,7 @@ class ObservationOpportunity:
         assert all(task.id in task_slew_angles for task in tasks), "Each task must have a slew angle interval specified in task_slew_angles."
         assert all(task.id in task_min_duration for task in tasks), "Each task must have a minimum duration requirement specified in min_duration_reqs."
         assert all(task_accessibility[task.id].is_subset(availability) for task in tasks), "Each task's accessibility interval must be a subset of the observation opportunity's availability interval."
-        assert all(accessibility.is_subset(task_accessibility[task.id]) for task in tasks), "The observation opportunity's accessibility interval must be a subset of each task's accessibility interval."
+        assert all(accessibility.overlaps(task_accessibility[task.id]) for task in tasks), "The observation opportunity's accessibility interval must be a subset of each task's accessibility interval."
         assert all(slew_angles.is_subset(task_slew_angles[task.id]) for task in tasks), "The observation opportunity's slew angle interval must be a subset of each task's slew angle interval."
         assert all(min_duration >= task_min_duration[task.id] for task in tasks), "The observation opportunity's minimum duration requirement must be greater than or equal to each task's minimum duration requirement."
 
@@ -547,16 +547,25 @@ class ObservationOpportunity:
     def __get_earliest_task_start(self, task : GenericObservationTask, t : float = np.NINF) -> float:
         """ Returns the earliest start time of the observation opportunity for a given task. """
         # ensure task is a parent task of the observation opportunity
-        assert task in self.tasks, f"Task {task} is not a parent task of this observation opportunity."
         assert t <= self.accessibility.right - self.min_duration, f"Current time {t} is too late to start the observation opportunity and satisfy minimum duration requirement."
         
         # the earliest start time is the maximum of the current time, 
         #  the observation opportunity's accessibility start, and the task's accessibility start
-        return max(t, self.accessibility.left, self.task_accessibility[task].left)
+        access_left = self.accessibility.left
+        task_left = self.task_accessibility[task.id].left
+
+        if t < access_left:
+            t = access_left
+        if t < task_left:
+            t = task_left
+
+        return t
+        
     
     def get_earliest_starts(self, t : float = np.NINF) -> Dict[GenericObservationTask, float]:
         """ Returns the earliest start time of each task being observed by this observation opportunity. """
-        return {task : self.__get_earliest_task_start(task, t) for task in self.tasks}
+        return {task : self.__get_earliest_task_start(task, t) 
+                for task in self.tasks}
 
     # -------------------------------------------
     #            UTILITY METHODS
@@ -575,12 +584,12 @@ class ObservationOpportunity:
         return {
             "id": self.id,
             "tasks": [task.to_dict() for task in sorted_tasks],
+            "accessibility": self.accessibility.to_dict(),
             "task_accessibility" : {task_id : interval.to_dict() for task_id, interval in self.task_accessibility.items()},
             "task_slew_angles" : {task_id : interval.to_dict() for task_id, interval in self.task_slew_angles.items()},
-            "min_duration_reqs" : {task_id : duration for task_id, duration in self.task_min_duration.items()},
+            "task_min_duration" : {task_id : duration for task_id, duration in self.task_min_duration.items()},
             "instrument_name": self.instrument_name,
             "max_duration" : self.max_duration,
-            "accessibility": self.accessibility.to_dict(),
             "min_duration": self.min_duration,
             "slew_angles": self.slew_angles.to_dict(),
             "availability" : self.availability.to_dict(),
@@ -593,16 +602,20 @@ class ObservationOpportunity:
                  for task_data in d["tasks"]}
 
         # return reconstructed observation opportunity
-        return cls(
-            task_accessibilities={tasks[task_id]: Interval.from_dict(interval) 
+        return ObservationOpportunity(
+            id=d["id"],
+            tasks = set(tasks.values()),
+            instrument_name = d["instrument_name"],
+            task_accessibility={task_id: Interval.from_dict(interval) 
                                   for task_id, interval in d["task_accessibility"].items()},
-            task_slew_angles={tasks[task_id]: Interval.from_dict(interval) 
+            task_slew_angles={task_id: Interval.from_dict(interval) 
                               for task_id, interval in d["task_slew_angles"].items()},
-            min_duration_reqs={tasks[task_id]: duration 
-                               for task_id, duration in d["min_duration_reqs"].items()},
-            instrument_name=d["instrument_name"],
-            max_duration=d["max_duration"],
-            must_overlap=d["must_overlap"]
+            task_min_duration={task_id: duration 
+                               for task_id, duration in d["task_min_duration"].items()},
+            accessibility = Interval.from_dict(d["accessibility"]),
+            slew_angles = Interval.from_dict(d["slew_angles"]),
+            min_duration = d["min_duration"],
+            max_duration = d["max_duration"]
         )
  
 
