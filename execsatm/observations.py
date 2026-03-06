@@ -52,15 +52,17 @@ class ObservationOpportunity:
         assert all(task.id in task_accessibility for task in tasks), "Each task must have an accessibility interval specified in task_accessibilities."
         assert all(task.id in task_slew_angles for task in tasks), "Each task must have a slew angle interval specified in task_slew_angles."
         assert all(task.id in task_min_duration for task in tasks), "Each task must have a minimum duration requirement specified in min_duration_reqs."
-        assert all(task_accessibility[task.id].is_subset(availability) for task in tasks), "Each task's accessibility interval must be a subset of the observation opportunity's availability interval."
-        assert all(accessibility.overlaps(task_accessibility[task.id]) for task in tasks), "The observation opportunity's accessibility interval must be a subset of each task's accessibility interval."
-        assert all(slew_angles.is_subset(task_slew_angles[task.id]) for task in tasks), "The observation opportunity's slew angle interval must be a subset of each task's slew angle interval."
-        assert all(min_duration >= task_min_duration[task.id] for task in tasks), "The observation opportunity's minimum duration requirement must be greater than or equal to each task's minimum duration requirement."
+        assert all(accessibility.overlaps(t_acc) for t_acc in task_accessibility.values()), "The observation opportunity's accessibility interval must be a subset of each task's accessibility interval."
+        assert all(slew_angles.is_subset(t_slew_angles) for t_slew_angles in task_slew_angles.values()), \
+            "The observation opportunity's slew angle interval must be a subset of each task's slew angle interval."
+        assert all(min_duration >= t_min_duration for t_min_duration in task_min_duration.values()), "The observation opportunity's minimum duration requirement must be greater than or equal to each task's minimum duration requirement."
 
         assert min_duration >= 0.0, "Minimum duration must be non-negative."
         assert max_duration > 0.0, "Maximum duration must be positive."
         assert min_duration <= max_duration, "Minimum duration must not exceed maximum duration."
+        assert all(availability.overlaps(task_accessibility[task.id]) for task in tasks), "Each task's accessibility interval must be a subset of the observation opportunity's availability interval."
         assert not accessibility.is_empty(), "Accessibility interval must not be empty."
+        assert accessibility.is_subset(availability), "Accessibility interval must be a subset of the observation opportunity's availability interval."
         assert not slew_angles.is_empty(), "Slew angle interval must not be empty."
         
         # set parameters
@@ -545,10 +547,7 @@ class ObservationOpportunity:
         return sum(task.priority for task in self.tasks) if self.tasks else 0.0
     
     def __get_earliest_task_start(self, task : GenericObservationTask, t : float = np.NINF) -> float:
-        """ Returns the earliest start time of the observation opportunity for a given task. """
-        # ensure task is a parent task of the observation opportunity
-        assert t <= self.accessibility.right - self.min_duration, f"Current time {t} is too late to start the observation opportunity and satisfy minimum duration requirement."
-        
+        """ Returns the earliest start time of the observation opportunity for a given task. """        
         # the earliest start time is the maximum of the current time, 
         #  the observation opportunity's accessibility start, and the task's accessibility start
         access_left = self.accessibility.left
@@ -564,6 +563,9 @@ class ObservationOpportunity:
     
     def get_earliest_starts(self, t : float = np.NINF) -> Dict[GenericObservationTask, float]:
         """ Returns the earliest start time of each task being observed by this observation opportunity. """
+        assert t in self.accessibility, \
+            f"Time t={t} is outside the observation opportunity's accessibility interval {self.accessibility}."                    
+        
         return {task : self.__get_earliest_task_start(task, t) 
                 for task in self.tasks}
 
@@ -627,7 +629,7 @@ class AtomicObservationOpportunity(ObservationOpportunity):
                  accessibility : Interval,
                  slew_angles : Interval,
                  min_duration : float,
-                 max_duration : float = 5*60,
+                 max_duration : float = 15*60,
                  id : str = None
                 ):
         """
@@ -641,7 +643,7 @@ class AtomicObservationOpportunity(ObservationOpportunity):
         - `slew_angles`: The interval of slew angles [deg] available for the observation for the task.
         - `instrument_name`: The name of the instrument to be used for the observation.
         - `min_duration`: The minimum duration required for the observation in seconds [s] for the task.
-        - `max_duration`: The maximum allowed duration for the observation opportunity in seconds [s] (default: 120 seconds = 2 minutes).
+        - `max_duration`: The maximum allowed duration for the observation opportunity in seconds [s] (default: 900 [s] = 15 [min]).
         - `id`: A unique identifier for the observation opportunity. If not provided, a new ID will be generated.
         """
         # validate inputs types

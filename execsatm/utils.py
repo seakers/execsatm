@@ -59,17 +59,19 @@ class Interval:
         if not isinstance(_other, Interval):
             raise TypeError(f'Cannot check subset with object of type `{type(_other)}`.')
 
-        if _other.left_open and self.left <= _other.left:                
-            return False
-        if not _other.left_open and self.left < _other.left:
-            return False
+        return self.left in _other and self.right in _other
+
+        # if _other.left_open and self.left <= _other.left:                
+        #     return False
+        # if not _other.left_open and self.left < _other.left:
+        #     return False
             
-        if _other.right_open and _other.right <= self.right:
-            return False
-        if not _other.right_open and _other.right < self.right:
-            return False
+        # if _other.right_open and _other.right <= self.right:
+        #     return False
+        # if not _other.right_open and _other.right < self.right:
+        #     return False
             
-        return True
+        # return True
 
         # return (__other.left <= self.left and self.right <= __other.right
         #         and (self.left_open or not __other.left_open)
