@@ -251,12 +251,15 @@ class ObservationOpportunity:
         - `other`: The other task observation opportunity to merge with.
         - `must_overlap`: If True, the observation opportunities must overlap in accessibility to be merged.
         """
+        
         # Calculate accessibility overlap
         accessibility_overlap : Interval = self.accessibility.intersection(other.accessibility)
 
         # check if accessibility intervals would need to be extended
-        needs_extension : bool = accessibility_overlap.is_empty()
-
+        needs_extension : bool = (accessibility_overlap.is_empty() 
+                                  or accessibility_overlap.span() <= 0.0
+                                  )
+        
         # check if accessibility time windows are not allowed to be extended and is needed
         if needs_extension and must_overlap: 
             # we cannot merge the tasks; return invalid time requirements
@@ -266,25 +269,48 @@ class ObservationOpportunity:
         preceeding_obs, proceeding_obs = sorted([self, other], key=lambda t: (t.accessibility.left, t.accessibility.span()))
 
         # Check if accesibility has any overlap
-        if not needs_extension:  # There is an overlap between the tasks' availability
-            
+        if needs_extension: # There is no overlap between the tasks' availability
+            # Find new accessibility bounds
+            accessibility_start = preceeding_obs.accessibility.right - preceeding_obs.min_duration
+            accessibility_end = proceeding_obs.accessibility.left + proceeding_obs.min_duration
+
+            # Extend accessibility
+            merged_accessibility : Interval = Interval(accessibility_start, accessibility_end) if accessibility_end > accessibility_start else EmptyInterval()
+
             # Calculate new observation duration requirement
-            min_duration_req = max(preceeding_obs.min_duration, proceeding_obs.min_duration)             
+            min_duration_req = merged_accessibility.span()
+        
+        else: # There is non-zero overlap between the tasks' availability            
+            # Calculate new observation duration requirement
+            min_duration_req = max(preceeding_obs.min_duration, proceeding_obs.min_duration)      
+
+            # get observation accessibility intervals
+            preceeding_accessibility = preceeding_obs.accessibility
+            proceeding_accessibility = proceeding_obs.accessibility                  
 
             # Check if either accessibility is fully contained within the other
-            if (proceeding_obs.accessibility.is_subset(preceeding_obs.accessibility)
-                and preceeding_obs.accessibility.is_subset(proceeding_obs.accessibility)):
+            if (proceeding_accessibility.is_subset(preceeding_accessibility)
+                and preceeding_accessibility.is_subset(proceeding_accessibility)):
+                # both accessibilities are the same; keep accessibility overlap
                 merged_accessibility = accessibility_overlap.copy()
 
-            elif proceeding_obs.accessibility.is_subset(preceeding_obs.accessibility):
-                # Keep preceeding_obs accessibility 
+            elif (proceeding_accessibility.is_subset(preceeding_accessibility)
+                  and proceeding_accessibility.left + proceeding_obs.min_duration \
+                    <= preceeding_accessibility.left + preceeding_obs.min_duration):
+                # proceeding observation accessibility is fully contained within the preceeding observation's accessibility
+                # and preceeding observation already meets the proceeding observation's minimum duration requirement; 
+                
+                # keep preceeding_obs accessibility and duration requirements
                 merged_accessibility = preceeding_obs.accessibility.copy()                
-                # min_duration_req = preceeding_obs.min_duration
 
-            elif preceeding_obs.accessibility.is_subset(proceeding_obs.accessibility):
-                # Keep proceeding_obs accessibility and duration requirements
-                merged_accessibility = proceeding_obs.accessibility.copy()
-                # min_duration_req = proceeding_obs.min_duration                
+            elif (preceeding_accessibility.is_subset(proceeding_accessibility)
+                  and preceeding_accessibility.left + preceeding_obs.min_duration \
+                    <= proceeding_accessibility.left + proceeding_obs.min_duration):
+                # preceeding observation accessibility is fully contained within the proceeding observation's accessibility
+                # and proceeding observation already meets the preceeding observation's minimum duration requirement;
+
+                # keep preceeding_obs accessibility and duration requirements
+                merged_accessibility = proceeding_obs.accessibility.copy()    
 
             else:
                 # Use tasks' accessibility and duration requirements to find new accessibility bounds
@@ -302,17 +328,6 @@ class ObservationOpportunity:
 
                 # Merge accessibility
                 merged_accessibility = Interval(accessibility_start, accessibility_end) if accessibility_start <= accessibility_end else EmptyInterval()
-        
-        else: # There is no overlap between the tasks' availability; we can only merge by extending the accessibility window
-            # Find new accessibility bounds
-            accessibility_start = preceeding_obs.accessibility.right - preceeding_obs.min_duration
-            accessibility_end = proceeding_obs.accessibility.left + proceeding_obs.min_duration
-
-            # Extend accessibility
-            merged_accessibility : Interval = Interval(accessibility_start, accessibility_end) if accessibility_end > accessibility_start else EmptyInterval()
-
-            # Calculate new observation duration requirement
-            min_duration_req = merged_accessibility.span()
 
         assert min_duration_req >= max(preceeding_obs.min_duration, proceeding_obs.min_duration),\
                 "Calculated minimum duration requirement does not satisfy parent observation opportunities' minimum duration requirements."
@@ -546,7 +561,7 @@ class ObservationOpportunity:
         """ Collects the priority of all parent tasks. """
         return sum(task.priority for task in self.tasks) if self.tasks else 0.0
     
-    def __get_earliest_task_start(self, task : GenericObservationTask, t : float = np.NINF) -> float:
+    def get_earliest_task_start(self, task : GenericObservationTask, t : float = np.NINF) -> float:
         """ Returns the earliest start time of the observation opportunity for a given task. """        
         # the earliest start time is the maximum of the current time, 
         #  the observation opportunity's accessibility start, and the task's accessibility start
@@ -566,7 +581,7 @@ class ObservationOpportunity:
         assert t in self.accessibility, \
             f"Time t={t} is outside the observation opportunity's accessibility interval {self.accessibility}."                    
         
-        return {task : self.__get_earliest_task_start(task, t) 
+        return {task : self.get_earliest_task_start(task, t) 
                 for task in self.tasks}
 
     # -------------------------------------------
