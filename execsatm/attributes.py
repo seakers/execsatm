@@ -3,7 +3,6 @@ from enum import Enum
 class TemporalRequirementAttributes(Enum):
     DURATION = 'duration [s]'
     REVISIT_TIME = 'revisit_time [s]'
-    CO_OBSERVATION_TIME = 'coobservation_time [s]'
     RESPONSE_TIME = 'response_time [s]'
     RESPONSE_TIME_NORM = 'response_time [normalized]'
     OBS_TIME = 't_img [s]'
@@ -20,6 +19,10 @@ class ObservationRequirementAttributes(Enum):
     INCIDENCE_ANGLE = 'incidence_angle [deg]'
     OFF_NADIR_ANGLE = 'off-nadir axis angle [deg]'
     ECLIPSE = 'eclipse'
+
+class CoObservationRequirementAttributes(Enum):
+    CO_OBSERVATION = 'co-observation'
+    DECORRELATION_TIME = 'decorrelation_time [s]'
 
 class SpatialCoverageRequirementAttributes(Enum):
     LOCATION = 'location'

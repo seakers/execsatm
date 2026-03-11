@@ -5,6 +5,8 @@ import numpy as np
 from typing import Any, Dict, List, Set, Tuple, Union, Tuple
 from pyparsing import ABC, abstractmethod
 
+from execsatm.attributes import CoObservationRequirementAttributes
+
 """
 ---------------------------------
 ABSTRACT REQUIREMENT DEFINITION
@@ -15,6 +17,7 @@ class RequirementTypes(Enum):
     CAPABILITY = 'capability'
     SPATIAL = 'spatial'
     PERFORMANCE = 'performance'
+    CO_OBSERVATION = 'co-observation'
 
 class MissionRequirement(ABC):
     def __init__(self, req_type : str, attribute: str, id : str = None):
@@ -101,6 +104,8 @@ class MissionRequirement(ABC):
             return CapabilityRequirement.from_dict(d)
         elif req_type.lower() == RequirementTypes.SPATIAL.value:
             return SpatialCoverageRequirement.from_dict(d)
+        elif req_type.lower() == RequirementTypes.CO_OBSERVATION.value:
+            return CoObservationRequirement.from_dict(d)
         
         raise NotImplementedError(f"Requirement type '{req_type}' not yet supported.")
     
@@ -1508,3 +1513,33 @@ class GridSpatialRequirement(SpatialCoverageRequirement):
         d['grid_index'] = self.grid_index
         d['grid_size'] = self.grid_size
         return d
+    
+"""
+-----------------------------
+CO-OBSERVATION REQUIREMENT DEFINITIONS
+-----------------------------
+"""
+
+class CoObservationPreferenceStrategies(Enum):
+    SUPER_ADDITIVE = 'super_additive'
+    LINEAR = 'linear'
+
+class CoObservationRequirement(MissionRequirement):
+    def __init__(self, 
+                 req_observations : list, 
+                 strategy : str,
+                 id = None):
+        # initialize parent class
+        super().__init__(RequirementTypes.CO_OBSERVATION.value, CoObservationRequirementAttributes.DECORRELATION_TIME.value, id)
+
+        # validate inputs
+        assert isinstance(req_observations, list) and len(req_observations) > 0, "Required observations must be a non-empty list of observation identifiers"
+        assert all(isinstance(obs, str) for obs in req_observations), "All required observations must be strings"
+        assert isinstance(strategy, str), "Preference strategy must be a string"
+        assert strategy.lower() in CoObservationPreferenceStrategies._value2member_map_, f"Preference strategy must be one of {list(CoObservationPreferenceStrategies._value2member_map_.keys())}"
+
+        # set attributes
+        self.req_observations = req_observations
+        self.strategy = strategy
+
+    
