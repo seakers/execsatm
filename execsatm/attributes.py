@@ -19,16 +19,6 @@ class ObservationRequirementAttributes(Enum):
     INCIDENCE_ANGLE = 'incidence_angle [deg]'
     OFF_NADIR_ANGLE = 'off-nadir axis angle [deg]'
     ECLIPSE = 'eclipse'
-
-class CoObservationRequirementAttributes(Enum):
-    CO_OBSERVATION = 'co-observation'
-    DECORRELATION_TIME = 'decorrelation_time [s]'
-
-class SpatialCoverageRequirementAttributes(Enum):
-    LOCATION = 'location'
-
-class CapabilityRequirementAttributes(Enum):
-    INSTRUMENT = 'instrument'
     # IDEAS:
     # BANDWIDTH = 'bandwidth [nm]'
     # SWATH_WIDTH = 'swath width [km]'
@@ -42,3 +32,12 @@ class CapabilityRequirementAttributes(Enum):
     # MIN_SPATIAL_RESOLUTION_ALONG_TRACK = 'min ground pixel along-track resolution [m]'
     # MIN_SPECTRAL_RESOLUTION = 'min spectral_resolution'
     # MAX_OBSERVATION_RANGE = 'max observation range [km]'
+
+class CoObservationRequirementAttributes(Enum):
+    DECORRELATION_TIME = 'decorrelation_time [s]'
+
+class SpatialCoverageRequirementAttributes(Enum):
+    LOCATION = 'location'
+
+class CapabilityRequirementAttributes(Enum):
+    INSTRUMENT = 'instrument'
