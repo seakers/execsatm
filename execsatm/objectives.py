@@ -2,7 +2,8 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Iterator, List, Union
 import uuid
-import numpy as np
+# import numpy as np
+import math
 
 from execsatm.events import GeophysicalEvent
 from execsatm.requirements import MissionRequirement, PerformanceRequirement, SpatialCoverageRequirement
@@ -42,22 +43,42 @@ class MissionObjective(ABC):
         self.requirements : Dict[str, MissionRequirement] = {requirement.attribute: requirement for requirement in requirements}
         self.id = str(uuid.UUID(id)) if id is not None else str(uuid.uuid1())
 
-    def eval_measurement_performance(self, measurement: dict) -> float:
+    # def eval_measurement_performance(self, measurement: dict, perfect_perf: bool = False) -> float:
+        # """Calculate the satisfaction score for the objective based on the preference scores of the measurement to the objective's requirements."""
+        # # If perfect_perf is True, return 1.0 regardless of the measurement input (used for testing and debugging purposes)
+    #     if perfect_perf: return 1.0
+
+    #     # Validate measurement input
+    #     assert isinstance(measurement, dict), "Measurement must be a dictionary"
+    #     assert all(isinstance(k, str) for k in measurement.keys()), "Measurement keys must be strings"
+    #     assert all(attribute in measurement for attribute in self.requirements.keys()), "Measurement must contain all requirement attributes"
+
+    #     # Evaluate measurement performance for each requirement attribute
+    #     pref_values = [
+    #         req.calc_preference(attribute, measurement[attribute]) 
+    #         for attribute,req in self.requirements.items()
+    #     ]
+
+    #     # Return product of all preference values
+    #     return np.prod(pref_values)
+
+    def eval_measurement_performance(self, measurement: dict, perfect_perf: bool = False) -> float:
         """Calculate the satisfaction score for the objective based on the preference scores of the measurement to the objective's requirements."""
+        # If perfect_perf is True, return 1.0 regardless of the measurement input (used for testing and debugging purposes)
+        if perfect_perf: 
+            return 1.0
 
-        # Validate measurement input
-        assert isinstance(measurement, dict), "Measurement must be a dictionary"
-        assert all(isinstance(k, str) for k in measurement.keys()), "Measurement keys must be strings"
-        assert all(attribute in measurement for attribute in self.requirements.keys()), "Measurement must contain all requirement attributes"
+        # Validation removed from hot path — inputs are trusted when called
+        # from _evaluate_sequence_at_times with precomputed data.
+        # Keep a debug-mode flag if needed:
+        # if __debug__: assert all(...)
 
-        # Evaluate measurement performance for each requirement attribute
-        pref_values = [
-            req.calc_preference(attribute, measurement[attribute]) 
-            for attribute,req in self.requirements.items()
-        ]
-
-        # Return product of all preference values
-        return np.prod(pref_values)
+        # Evaluate measurement performance for each requirement attribute 
+        #  and return product of all preference values
+        return math.prod(
+            req.calc_preference(attribute, measurement[attribute])
+            for attribute, req in self.requirements.items()
+        )
 
     def to_dict(self) -> Dict[str, Union[str, float]]:
         """Convert the objective to a dictionary."""

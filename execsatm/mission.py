@@ -1,5 +1,6 @@
 
 from typing import  Dict
+# import numpy as np
 
 from execsatm.tasks import GenericObservationTask, DefaultMissionTask, EventObservationTask
 from execsatm.observations import ObservationOpportunity
@@ -47,18 +48,31 @@ class Mission:
         # return sum of values
         return sum(values)
 
-    def calc_task_value(self, task: GenericObservationTask, measurement : dict) -> float:
+    def calc_task_value(self, 
+                        task: GenericObservationTask, 
+                        measurement : dict,
+                        obj_relevances : dict = None,
+                        perfect_perf : bool = False) -> float:
         """Calculate the value of a task based on the mission's objectives."""
         # Validate inputs
         assert isinstance(task, GenericObservationTask), "Task must be an instance of `GenericObservationTask`"
         assert isinstance(measurement, dict), "Measurement must be a dictionary"
         assert TemporalRequirementAttributes.OBS_TIME.value in measurement, "Measurement must contain 't_img [s]' key for observation time"
 
-        # Maps objectives to their relevance to the task at hand
-        obj_relevances : Dict[MissionObjective, float] = self.relate_objectives_to_task(task)
+        if obj_relevances is None:
+            # Maps objectives to their relevance to the task at hand
+            obj_relevances : Dict[MissionObjective, float] = self.relate_objectives_to_task(task)
+        else:
+            # Validate `obj_relevances`
+            # TODO move this to whenver `obj_relevances` is generated to avoid redundant checks
+            # assert all(isinstance(obj, MissionObjective) for obj in obj_relevances), "All keys in obj_relevances must be instances of `MissionObjective`"
+            # assert all(isinstance(val, (int,float)) and 0 <= val <= 1 for val in obj_relevances.values()), "All values in obj_relevances must be between 0 and 1"
+            # assert set(obj_relevances.keys()) == set(self.objectives.keys()), "obj_relevances must contain the same objectives as the mission"
+            pass
 
         # Check for availability of measurement at observation time
-        if measurement.get(TemporalRequirementAttributes.OBS_TIME.value) not in task.availability: return 0.0
+        if measurement.get(TemporalRequirementAttributes.OBS_TIME.value) not in task.availability: 
+            return 0.0
 
         # Clip duration to task availability if applicable
         if TemporalRequirementAttributes.DURATION.value in measurement:
@@ -72,7 +86,7 @@ class Mission:
         task_values = {objective : [
                             weight,                                             # weight of the objective
                             obj_relevances[objective],                          # relevance of the objective to the task
-                            objective.eval_measurement_performance(measurement),# performance of the measurement for the objective
+                            objective.eval_measurement_performance(measurement, perfect_perf),# performance of the measurement for the objective
                         ]
                 for objective, weight in self.objectives.items()}
         
@@ -81,7 +95,8 @@ class Mission:
             measurement[TemporalRequirementAttributes.DURATION.value] = d_prev
     
         # Return the sum of values for all objectives times the task priority
-        return task.priority * sum([np.prod(values) for values in task_values.values()])
+        # return task.priority * sum([np.prod(values) for values in task_values.values()])
+        return task.priority * sum([math.prod(values) for values in task_values.values()])
 
     def relate_objectives_to_task(self, task: GenericObservationTask) -> Dict[MissionObjective, float]:
         """Relate objectives to a task based on the task's parameters."""
