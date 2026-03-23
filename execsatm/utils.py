@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import numpy as np 
 
@@ -54,7 +55,7 @@ class Interval:
                 or __other.left in self
                 or __other.right in self)
 
-    def is_subset(self, _other: 'Interval') -> bool:
+    def is_subset(self, _other: Interval) -> bool:
         """ checks if this interval is a subset of another """
         if not isinstance(_other, Interval):
             raise TypeError(f'Cannot check subset with object of type `{type(_other)}`.')
@@ -295,6 +296,13 @@ class EmptyInterval(Interval):
     def span(self) -> float:
         """ Returns the span of the interval. """
         return 0.0
+    
+    def is_subset(self, _other : Interval) -> bool:
+        if not isinstance(_other, Interval):
+            raise TypeError(f'Cannot check subset with object of type `{type(_other)}`.')
+
+        # the empty set is a subset of every set, including itself
+        return True
     
 def print_banner(scenario_name = None) -> None:
     # clear the console
