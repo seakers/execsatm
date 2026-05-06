@@ -14,6 +14,10 @@ from execsatm.utils import print_banner
 
 ATTRIBUTE = SpectralRequirement.ATTRIBUTE  # "spectral_bands"
 
+# Band tuple format: (center_nm, bandwidth_nm, resolution_nm) — all values in nm.
+# Edge wavelengths are derived as: lower = center - bandwidth/2, upper = center + bandwidth/2.
+# wavelength_range tuples are (min_nm, max_nm).
+
 """
 ----------------------------------
 SPECTRAL BAND COUNT REQUIREMENT
@@ -21,8 +25,8 @@ SPECTRAL BAND COUNT REQUIREMENT
 """
 class TestSpectralBandCountRequirement(unittest.TestCase):
     def setUp(self):
-        self.wavelength_range = (380, 1000)
-        self.thresholds = [3, 5]
+        self.wavelength_range = (380, 1000)  # nm
+        self.thresholds = [3, 5]            # band counts
         self.scores = [0.0, 0.5, 1.0]
         self.req = SpectralBandCountRequirement(
             wavelength_range=self.wavelength_range,
@@ -86,12 +90,12 @@ class TestSpectralBandCountRequirement(unittest.TestCase):
                           thresholds=self.thresholds, scores=self.scores, id="123")
 
     def test_get_preference(self):
-        # thresholds=[3,5], scores=[0.0, 0.5, 1.0] over range (380,1000)
+        # thresholds=[3,5] bands, scores=[0.0, 0.5, 1.0] over range (380, 1000) nm
         no_bands      = []
-        one_band      = [(500, 100, 10)]
+        one_band      = [(500, 100, 10)]                                            # center=500nm, bw=100nm, res=10nm
         three_bands   = [(450, 50, 5), (650, 50, 5), (850, 50, 5)]
         five_bands    = [(450,50,5),(550,50,5),(650,50,5),(750,50,5),(850,50,5)]
-        out_of_range  = [(1500, 100, 10), (2000, 100, 10)]  # all outside (380,1000)
+        out_of_range  = [(1500, 100, 10), (2000, 100, 10)]  # centers outside (380, 1000) nm
 
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, no_bands),     0.0)
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, one_band),     0.0)
@@ -178,9 +182,9 @@ SPECTRAL RESOLUTION REQUIREMENT
 """
 class TestSpectralResolutionRequirement(unittest.TestCase):
     def setUp(self):
-        self.wavelength_range = (380, 1000)
-        self.thresholds = [5, 10]
-        self.scores = [1.0, 0.5, 0.0]   # lower resolution (nm) = better
+        self.wavelength_range = (380, 1000)  # nm
+        self.thresholds = [5, 10]            # nm — resolution thresholds (lower = finer)
+        self.scores = [1.0, 0.5, 0.0]        # descending: finer resolution earns higher score
         self.req = SpectralResolutionRequirement(
             wavelength_range=self.wavelength_range,
             thresholds=self.thresholds,
@@ -240,14 +244,14 @@ class TestSpectralResolutionRequirement(unittest.TestCase):
                           thresholds=self.thresholds, scores=self.scores, id="123")
 
     def test_get_preference(self):
-        # thresholds=[5, 10], scores=[1.0, 0.5, 0.0]; uses <=
-        # best_res <= 5  → 1.0
-        # best_res <= 10 → 0.5
-        # best_res > 10  → 0.0
-        bands_5nm  = [(500, 100, 5),  (700, 100, 5)]    # best = 5nm  → 1.0
-        bands_8nm  = [(500, 100, 8),  (700, 100, 8)]    # best = 8nm  → 0.5
-        bands_15nm = [(500, 100, 15)]                   # best = 15nm → 0.0
-        no_in_range = [(1500, 100, 5)]                  # outside (380,1000) → 0.0
+        # thresholds=[5, 10] nm, scores=[1.0, 0.5, 0.0]; uses <=
+        # best_res <= 5nm  → 1.0
+        # best_res <= 10nm → 0.5
+        # best_res > 10nm  → 0.0
+        bands_5nm   = [(500, 100, 5),  (700, 100, 5)]   # best resolution = 5nm  → 1.0
+        bands_8nm   = [(500, 100, 8),  (700, 100, 8)]   # best resolution = 8nm  → 0.5
+        bands_15nm  = [(500, 100, 15)]                  # best resolution = 15nm → 0.0
+        no_in_range = [(1500, 100, 5)]                  # center outside (380, 1000) nm → 0.0
 
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, bands_5nm),   1.0)
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, bands_8nm),   0.5)
@@ -256,7 +260,7 @@ class TestSpectralResolutionRequirement(unittest.TestCase):
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, []),          0.0)
 
         # takes the best (min) resolution among filtered bands
-        mixed = [(500, 100, 5), (700, 100, 12)]   # best in range = 5nm → 1.0
+        mixed = [(500, 100, 5), (700, 100, 12)]   # best resolution in range = 5nm → 1.0
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, mixed), 1.0)
 
         # wavelength_range=None uses all bands
@@ -329,8 +333,8 @@ SPECTRAL RANGE REQUIREMENT
 """
 class TestSpectralRangeRequirement(unittest.TestCase):
     def setUp(self):
-        self.required_min_nm = 380.0
-        self.required_max_nm = 2500.0
+        self.required_min_nm = 380.0   # nm — instrument lower edge must be ≤ this
+        self.required_max_nm = 2500.0  # nm — instrument upper edge must be ≥ this
         self.req = SpectralRangeRequirement(
             required_min_nm=self.required_min_nm,
             required_max_nm=self.required_max_nm,
@@ -367,16 +371,16 @@ class TestSpectralRangeRequirement(unittest.TestCase):
                           required_max_nm=self.required_max_nm, id="123")
 
     def test_get_preference(self):
-        # edges = center ± bandwidth/2
-        # wide: min=375, max=2550 → covers [380, 2500] → 1.0
+        # edge wavelengths: lower = center - bandwidth/2, upper = center + bandwidth/2 (nm)
+        # wide: lower edge = 375nm, upper edge = 2550nm → covers [380, 2500] nm → 1.0
         wide   = [(500, 250, 10), (1500, 500, 20), (2400, 300, 30)]
-        # exact: min=375 (380-10/2), max=2505 (2500+10/2) → 1.0
+        # exact: lower edge = 375nm (380-10/2), upper edge = 2505nm (2500+10/2) → 1.0
         exact  = [(380, 10, 5), (2500, 10, 5)]
-        # narrow: max=850 < 2500 → 0.0
+        # narrow: upper edge = 850nm < 2500nm → 0.0
         narrow = [(500, 100, 10), (800, 100, 10)]
-        # no low end: min=450 > 380 → 0.0
+        # no low end: lower edge = 550nm > 380nm → 0.0
         no_low = [(600, 100, 10), (2500, 10, 5)]
-        # empty
+        # empty band list → 0.0
         empty  = []
 
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, wide),   1.0)
@@ -447,8 +451,8 @@ TIERED SPECTRAL REQUIREMENT
 """
 class TestTieredSpectralRequirement(unittest.TestCase):
     def setUp(self):
-        self.tier1_req = SpectralBandCountRequirement((8000, 12000), [5], [0.0, 1.0])
-        self.tier2_req = SpectralBandCountRequirement((8000, 12000), [3], [0.0, 1.0])
+        self.tier1_req = SpectralBandCountRequirement((8000, 12000), [5], [0.0, 1.0])  # range in nm (TIR)
+        self.tier2_req = SpectralBandCountRequirement((8000, 12000), [3], [0.0, 1.0])  # range in nm (TIR)
         self.tiers = [
             {"score": 1.0, "requirements": [self.tier1_req]},
             {"score": 0.5, "requirements": [self.tier2_req]},
@@ -505,11 +509,11 @@ class TestTieredSpectralRequirement(unittest.TestCase):
                           tiers=self.tiers, id="123")
 
     def test_get_preference(self):
-        # tier1: ≥5 bands in 8-12 um → 1.0; tier2: ≥3 bands → 0.5; else → 0.0
-        five_bands  = [(8500,500,100),(9500,500,100),(10500,500,100),(11500,500,100),(12000,500,100)]
-        three_bands = [(8500,500,100),(10000,500,100),(11500,500,100)]
-        one_band    = [(9000,500,100)]
-        vnir_bands  = [(500,100,10),(700,100,10)]  # outside 8-12 um → 0.0
+        # tier1: ≥5 bands in 8000–12000 nm → 1.0; tier2: ≥3 bands → 0.5; else → 0.0
+        five_bands  = [(8500,500,100),(9500,500,100),(10500,500,100),(11500,500,100),(12000,500,100)]  # nm
+        three_bands = [(8500,500,100),(10000,500,100),(11500,500,100)]                                 # nm
+        one_band    = [(9000,500,100)]                                                                 # nm
+        vnir_bands  = [(500,100,10),(700,100,10)]  # centers outside 8000–12000 nm → 0.0
 
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, five_bands),  1.0)
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, three_bands), 0.5)
@@ -518,13 +522,13 @@ class TestTieredSpectralRequirement(unittest.TestCase):
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, []),          0.0)
 
         # tier with multiple simultaneous requirements: both must pass
-        tir_req  = SpectralBandCountRequirement((8000, 12000), [3], [0.0, 1.0])
-        mwir_req = SpectralBandCountRequirement((3000, 4500),  [1], [0.0, 1.0])
+        tir_req  = SpectralBandCountRequirement((8000, 12000), [3], [0.0, 1.0])  # TIR range, nm
+        mwir_req = SpectralBandCountRequirement((3000, 4500),  [1], [0.0, 1.0])  # MWIR range, nm
         multi_tier = TieredSpectralRequirement(tiers=[
             {"score": 1.0, "requirements": [tir_req, mwir_req]},
         ])
-        tir_only  = three_bands                                      # no MWIR
-        both_reqs = three_bands + [(3500, 200, 100)]                 # TIR + MWIR
+        tir_only  = three_bands                                      # no MWIR band
+        both_reqs = three_bands + [(3500, 200, 100)]                 # TIR + one MWIR band (center=3500nm)
         self.assertAlmostEqual(multi_tier.calc_preference(ATTRIBUTE, tir_only),  0.0)
         self.assertAlmostEqual(multi_tier.calc_preference(ATTRIBUTE, both_reqs), 1.0)
 

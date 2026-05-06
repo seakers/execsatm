@@ -1864,8 +1864,8 @@ class TieredSpectralRequirement(SpectralRequirement):
         return 0.0
 
     def __repr__(self):
-        summaries = [f"(score={t['score']}, n_reqs={len(t['requirements'])})" for t in self.tiers]
-        return super().__repr__()[:-1] + f", tiers={summaries})"
+        summaries = ', '.join(f"(score={t['score']}, n_reqs={len(t['requirements'])})" for t in self.tiers)
+        return super().__repr__()[:-1] + f", tiers=[{summaries}])"
 
     def to_dict(self):
         d = super().to_dict()
