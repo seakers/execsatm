@@ -15,25 +15,26 @@ class RequirementTypes(Enum):
     CAPABILITY = 'capability'
     SPATIAL = 'spatial'
     PERFORMANCE = 'performance'
+    SPECTRAL = 'spectral'
 
 class MissionRequirement(ABC):
     def __init__(self, req_type : str, attribute: str, id : str = None):
         """
-        ### Mission Requirement 
-        
+        ### Mission Requirement
+
         Initialize a mission requirement with a requirement type, attribute, strategy, and unique ID.
         - :`req_type`: The type of requirement (e.g., "capability", "temporal", "spatial").
         - :`attribute`: The attribute being measured (e.g., "temperature", "humidity").
-        - :`id`: Optional unique identifier for the requirement. If not provided, a UUID will be generated.    
+        - :`id`: Optional unique identifier for the requirement. If not provided, a UUID will be generated.
         """
         # validate argument types
         assert isinstance(req_type, str), "Requirement type must be a string"
         assert isinstance(attribute, str), "Attribute must be a string"
         assert isinstance(id, str) or id is None, "ID must be a string or `None`"
-        
+
         # validate argument values
         assert req_type.lower() in RequirementTypes._value2member_map_, f"Requirement type must be one of {list(RequirementTypes._value2member_map_.keys())}"
-        
+
         # set attributes
         self.req_type : str = req_type.lower()
         self.attribute : str = attribute.lower()
@@ -94,14 +95,16 @@ class MissionRequirement(ABC):
         # unpack dictionary
         req_type = d.get("req_type")
 
-        # initiate approriate requirement 
+        # initiate approriate requirement
         if req_type.lower() == RequirementTypes.PERFORMANCE.value:
             return PerformanceRequirement.from_dict(d)
         elif req_type.lower() == RequirementTypes.CAPABILITY.value:
             return CapabilityRequirement.from_dict(d)
         elif req_type.lower() == RequirementTypes.SPATIAL.value:
             return SpatialCoverageRequirement.from_dict(d)
-        
+        elif req_type.lower() == RequirementTypes.SPECTRAL.value:
+            return SpectralRequirement.from_dict(d)
+
         raise NotImplementedError(f"Requirement type '{req_type}' not yet supported.")
     
     @abstractmethod
@@ -1508,3 +1511,394 @@ class GridSpatialRequirement(SpatialCoverageRequirement):
         d['grid_index'] = self.grid_index
         d['grid_size'] = self.grid_size
         return d
+    
+"""
+---------------------------------
+SPECTRAL REQUIREMENT DEFINITIONS
+---------------------------------
+"""
+# All spectral requirements accept a List[Tuple[float, float, float]] as input value,
+#   where each tuple is (center_nm, bandwidth_nm, resolution_nm).
+
+class SpectralPreferenceStrategies(Enum):
+    BAND_COUNT  = 'band_count'
+    RESOLUTION  = 'spectral_resolution'
+    RANGE       = 'spectral_range'
+    TIERED      = 'tiered'
+
+class SpectralRequirement(MissionRequirement):
+    ATTRIBUTE = 'spectral_bands'
+
+    def __init__(self, strategy: str, id=None):
+        """
+        ### Spectral Requirement
+
+        Base class for spectral requirements. All subclasses receive the instrument's band list
+        as `value`: `List[Tuple[float, float, float]]` = `[(center_nm, bandwidth_nm, resolution_nm), ...]`.
+        - :`strategy`: Name of the spectral preference strategy.
+        - :`id`: Optional unique identifier.
+        """
+        super().__init__(RequirementTypes.SPECTRAL.value, self.ATTRIBUTE, id)
+
+        assert isinstance(strategy, str), "Preference strategy must be a string"
+        assert strategy.lower() in SpectralPreferenceStrategies._value2member_map_, \
+            f"Preference strategy must be one of {list(SpectralPreferenceStrategies._value2member_map_.keys())}"
+
+        self.strategy: str = strategy.lower()
+
+    def _validate_bands(self, bands: List[Tuple]) -> None:
+        assert isinstance(bands, list), "Bands must be a list"
+        for band in bands:
+            assert isinstance(band, (tuple, list)) and len(band) == 3, \
+                "Each band must be a tuple of (center_nm, bandwidth_nm, resolution_nm)"
+            center, bw, res = band
+            assert isinstance(center, (int, float)) and center > 0, "Center wavelength must be a positive number"
+            assert isinstance(bw, (int, float)) and bw > 0, "Bandwidth must be a positive number"
+            assert isinstance(res, (int, float)) and res > 0, "Resolution must be a positive number"
+
+    def _filter_bands(self, bands: List[Tuple], wavelength_range: Tuple[float, float]) -> List[Tuple]:
+        """Return bands whose center wavelength falls within [min_nm, max_nm]."""
+        if wavelength_range is None:
+            return bands
+        min_nm, max_nm = wavelength_range
+        return [b for b in bands if min_nm <= b[0] <= max_nm]
+
+    def __repr__(self):
+        return f"SpectralRequirement(strategy={SpectralPreferenceStrategies._value2member_map_[self.strategy].name})"
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'SpectralRequirement':
+        """Create a spectral requirement from a dictionary."""
+        required_keys = ['req_type', 'strategy']
+        assert all(key in d for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        strategy = d.get("strategy").lower()
+
+        if strategy == SpectralPreferenceStrategies.BAND_COUNT.value:
+            return SpectralBandCountRequirement.from_dict(d)
+        elif strategy == SpectralPreferenceStrategies.RESOLUTION.value:
+            return SpectralResolutionRequirement.from_dict(d)
+        elif strategy == SpectralPreferenceStrategies.RANGE.value:
+            return SpectralRangeRequirement.from_dict(d)
+        elif strategy == SpectralPreferenceStrategies.TIERED.value:
+            return TieredSpectralRequirement.from_dict(d)
+
+        raise NotImplementedError(f"Preference function for strategy '{strategy}' not yet supported.")
+
+    @abstractmethod
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, SpectralRequirement):
+            return self.strategy == other.strategy
+        return False
+
+    @abstractmethod
+    def to_dict(self):
+        d = super().to_dict()
+        d["strategy"] = self.strategy
+        return d
+
+
+class SpectralBandCountRequirement(SpectralRequirement):
+    def __init__(self,
+                 wavelength_range: Tuple[float, float],
+                 thresholds: List[int],
+                 scores: List[float],
+                 id=None):
+        """
+        ### Spectral Band Count Requirement
+
+        Evaluates preference based on the number of bands whose center wavelength falls
+        within `wavelength_range`. Scoring follows StepsRequirement semantics:
+        `scores[i]` is returned when the band count is less than `thresholds[i]`.
+        - :`wavelength_range`: `(min_nm, max_nm)` filter, or `None` to count all bands.
+        - :`thresholds`: Band count thresholds in ascending order.
+        - :`scores`: Preference scores; `len(scores) == len(thresholds) + 1`.
+        - :`id`: Optional unique identifier.
+        """
+        super().__init__(SpectralPreferenceStrategies.BAND_COUNT.value, id)
+
+        assert wavelength_range is None or (
+            isinstance(wavelength_range, (tuple, list)) and len(wavelength_range) == 2
+            and wavelength_range[0] < wavelength_range[1]
+        ), "wavelength_range must be a (min_nm, max_nm) tuple or None"
+        assert isinstance(thresholds, list) and all(isinstance(t, (int, float)) for t in thresholds), \
+            "Thresholds must be a list of numbers"
+        assert all(thresholds[i] <= thresholds[i + 1] for i in range(len(thresholds) - 1)), \
+            "Thresholds must be in ascending order"
+        assert isinstance(scores, list) and len(scores) == len(thresholds) + 1, \
+            "scores must have length len(thresholds) + 1"
+        assert all(0.0 <= s <= 1.0 for s in scores), "Scores must be in [0, 1]"
+
+        self.wavelength_range = tuple(wavelength_range) if wavelength_range is not None else None
+        self.thresholds = list(thresholds)
+        self.scores = list(scores)
+
+    def _eval_preference_function(self, bands: List[Tuple]) -> float:
+        self._validate_bands(bands)
+        count = len(self._filter_bands(bands, self.wavelength_range))
+        for threshold, score in zip(self.thresholds, self.scores[:-1]):
+            if count < threshold:
+                return score
+        return self.scores[-1]
+
+    def __repr__(self):
+        return (super().__repr__()[:-1] +
+                f", wavelength_range={self.wavelength_range}, thresholds={self.thresholds}, scores={self.scores})")
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['wavelength_range'] = list(self.wavelength_range) if self.wavelength_range is not None else None
+        d['thresholds'] = self.thresholds
+        d['scores'] = self.scores
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'SpectralBandCountRequirement':
+        required_keys = ['req_type', 'strategy', 'thresholds', 'scores']
+        assert all(key in d for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        assert d.get("strategy").lower() == SpectralPreferenceStrategies.BAND_COUNT.value, \
+            f"Strategy does not match requirement definition. Must be '{SpectralPreferenceStrategies.BAND_COUNT.value}'"
+        wl = d.get("wavelength_range", None)
+        return cls(tuple(wl) if wl is not None else None,
+                   d.get("thresholds"), d.get("scores"), d.get("id", None))
+
+    def __eq__(self, other):
+        if not (super().__eq__(other) and isinstance(other, SpectralBandCountRequirement)):
+            return False
+        wl_match = (self.wavelength_range is None and other.wavelength_range is None) or (
+            self.wavelength_range is not None and other.wavelength_range is not None and
+            all(abs(a - b) < 1e-6 for a, b in zip(self.wavelength_range, other.wavelength_range))
+        )
+        return (wl_match
+                and self.thresholds == other.thresholds
+                and all(abs(a - b) < 1e-6 for a, b in zip(self.scores, other.scores)))
+
+
+class SpectralResolutionRequirement(SpectralRequirement):
+    def __init__(self,
+                 wavelength_range: Tuple[float, float],
+                 thresholds: List[float],
+                 scores: List[float],
+                 id=None):
+        """
+        ### Spectral Resolution Requirement
+
+        Evaluates preference based on the finest (minimum) spectral resolution in nm among
+        bands within `wavelength_range`. Lower resolution value = finer = better, so
+        `scores` should typically decrease as `thresholds` increase.
+        - :`wavelength_range`: `(min_nm, max_nm)` filter, or `None` for all bands.
+        - :`thresholds`: Resolution thresholds in nm, ascending order.
+        - :`scores`: Preference scores; `len(scores) == len(thresholds) + 1`.
+        - :`id`: Optional unique identifier.
+        """
+        super().__init__(SpectralPreferenceStrategies.RESOLUTION.value, id)
+
+        assert wavelength_range is None or (
+            isinstance(wavelength_range, (tuple, list)) and len(wavelength_range) == 2
+            and wavelength_range[0] < wavelength_range[1]
+        ), "wavelength_range must be a (min_nm, max_nm) tuple or None"
+        assert isinstance(thresholds, list) and all(isinstance(t, (int, float)) for t in thresholds), \
+            "Thresholds must be a list of numbers"
+        assert all(thresholds[i] <= thresholds[i + 1] for i in range(len(thresholds) - 1)), \
+            "Thresholds must be in ascending order"
+        assert isinstance(scores, list) and len(scores) == len(thresholds) + 1, \
+            "scores must have length len(thresholds) + 1"
+        assert all(0.0 <= s <= 1.0 for s in scores), "Scores must be in [0, 1]"
+
+        self.wavelength_range = tuple(wavelength_range) if wavelength_range is not None else None
+        self.thresholds = list(thresholds)
+        self.scores = list(scores)
+
+    def _eval_preference_function(self, bands: List[Tuple]) -> float:
+        self._validate_bands(bands)
+        filtered = self._filter_bands(bands, self.wavelength_range)
+        if not filtered:
+            return 0.0
+        best_resolution = min(b[2] for b in filtered)
+        # Use <= so that a resolution exactly at the threshold earns the better score.
+        # (e.g. 5 nm instrument vs 5 nm threshold → scores[0], not scores[1])
+        for threshold, score in zip(self.thresholds, self.scores[:-1]):
+            if best_resolution <= threshold:
+                return score
+        return self.scores[-1]
+
+    def __repr__(self):
+        return (super().__repr__()[:-1] +
+                f", wavelength_range={self.wavelength_range}, thresholds={self.thresholds}, scores={self.scores})")
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['wavelength_range'] = list(self.wavelength_range) if self.wavelength_range is not None else None
+        d['thresholds'] = self.thresholds
+        d['scores'] = self.scores
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'SpectralResolutionRequirement':
+        required_keys = ['req_type', 'strategy', 'thresholds', 'scores']
+        assert all(key in d for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        assert d.get("strategy").lower() == SpectralPreferenceStrategies.RESOLUTION.value, \
+            f"Strategy does not match requirement definition. Must be '{SpectralPreferenceStrategies.RESOLUTION.value}'"
+        wl = d.get("wavelength_range", None)
+        return cls(tuple(wl) if wl is not None else None,
+                   d.get("thresholds"), d.get("scores"), d.get("id", None))
+
+    def __eq__(self, other):
+        if not (super().__eq__(other) and isinstance(other, SpectralResolutionRequirement)):
+            return False
+        wl_match = (self.wavelength_range is None and other.wavelength_range is None) or (
+            self.wavelength_range is not None and other.wavelength_range is not None and
+            all(abs(a - b) < 1e-6 for a, b in zip(self.wavelength_range, other.wavelength_range))
+        )
+        return (wl_match
+                and self.thresholds == other.thresholds
+                and all(abs(a - b) < 1e-6 for a, b in zip(self.scores, other.scores)))
+
+
+class SpectralRangeRequirement(SpectralRequirement):
+    def __init__(self,
+                 required_min_nm: float,
+                 required_max_nm: float,
+                 id=None):
+        """
+        ### Spectral Range Requirement
+
+        Evaluates whether the instrument's spectral span encompasses
+        `[required_min_nm, required_max_nm]`. Edge wavelengths are derived from each
+        band as `center ± bandwidth/2`. Returns 1.0 when both endpoints are satisfied
+        (`instrument_min <= required_min_nm` and `instrument_max >= required_max_nm`),
+        0.0 otherwise. Instruments that extend beyond the reference range also score 1.0.
+        - :`required_min_nm`: Instrument lower edge must be ≤ this value (nm).
+        - :`required_max_nm`: Instrument upper edge must be ≥ this value (nm).
+        - :`id`: Optional unique identifier.
+        """
+        super().__init__(SpectralPreferenceStrategies.RANGE.value, id)
+
+        assert isinstance(required_min_nm, (int, float)) and required_min_nm > 0, \
+            "required_min_nm must be a positive number"
+        assert isinstance(required_max_nm, (int, float)) and required_max_nm > required_min_nm, \
+            "required_max_nm must be greater than required_min_nm"
+
+        self.required_min_nm = float(required_min_nm)
+        self.required_max_nm = float(required_max_nm)
+
+    def _eval_preference_function(self, bands: List[Tuple]) -> float:
+        self._validate_bands(bands)
+        if not bands:
+            return 0.0
+        instrument_min = min(b[0] - b[1] / 2.0 for b in bands)
+        instrument_max = max(b[0] + b[1] / 2.0 for b in bands)
+        return 1.0 if (instrument_min <= self.required_min_nm and instrument_max >= self.required_max_nm) else 0.0
+
+    def __repr__(self):
+        return (super().__repr__()[:-1] +
+                f", required_min_nm={self.required_min_nm}, required_max_nm={self.required_max_nm})")
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['required_min_nm'] = self.required_min_nm
+        d['required_max_nm'] = self.required_max_nm
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'SpectralRangeRequirement':
+        required_keys = ['req_type', 'strategy', 'required_min_nm', 'required_max_nm']
+        assert all(key in d for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        assert d.get("strategy").lower() == SpectralPreferenceStrategies.RANGE.value, \
+            f"Strategy does not match requirement definition. Must be '{SpectralPreferenceStrategies.RANGE.value}'"
+        return cls(d.get("required_min_nm"), d.get("required_max_nm"), d.get("id", None))
+
+    def __eq__(self, other):
+        if not (super().__eq__(other) and isinstance(other, SpectralRangeRequirement)):
+            return False
+        return (abs(self.required_min_nm - other.required_min_nm) < 1e-6 and
+                abs(self.required_max_nm - other.required_max_nm) < 1e-6)
+
+
+class TieredSpectralRequirement(SpectralRequirement):
+    def __init__(self, tiers: List[Dict], id=None):
+        """
+        ### Tiered Spectral Requirement
+
+        Evaluates an ordered list of tiers from best (highest score) to worst. Returns the
+        score of the first tier in which every sub-requirement returns > 0.0, or 0.0 if no
+        tier passes. Use this to express "ideally X, or at least Y" compound requirements.
+
+        Example — "ideally ≥5 bands in 8–12 µm, at least ≥3 bands":
+        ```python
+        TieredSpectralRequirement(tiers=[
+            {"score": 1.0, "requirements": [SpectralBandCountRequirement((8000, 12000), [5], [0.0, 1.0])]},
+            {"score": 0.5, "requirements": [SpectralBandCountRequirement((8000, 12000), [3], [0.0, 1.0])]},
+        ])
+        ```
+        - :`tiers`: List of dicts in descending score order, each containing:
+            - `"score"` (float ∈ [0, 1]): preference value returned when this tier activates.
+            - `"requirements"` (List[SpectralRequirement]): all must pass (return > 0.0).
+        - :`id`: Optional unique identifier.
+        """
+        super().__init__(SpectralPreferenceStrategies.TIERED.value, id)
+
+        assert isinstance(tiers, list) and len(tiers) > 0, "Tiers must be a non-empty list"
+        for tier in tiers:
+            assert isinstance(tier, dict) and "score" in tier and "requirements" in tier, \
+                "Each tier must be a dict with 'score' and 'requirements' keys"
+            assert isinstance(tier["score"], (int, float)) and 0.0 <= tier["score"] <= 1.0, \
+                "Tier score must be in [0, 1]"
+            assert isinstance(tier["requirements"], list) and len(tier["requirements"]) > 0, \
+                "Each tier must have a non-empty list of requirements"
+            assert all(isinstance(r, SpectralRequirement) for r in tier["requirements"]), \
+                "All tier requirements must be SpectralRequirement instances"
+        scores = [t["score"] for t in tiers]
+        assert all(scores[i] >= scores[i + 1] for i in range(len(scores) - 1)), \
+            "Tier scores must be in descending order (best first)"
+
+        self.tiers = tiers
+
+    def _eval_preference_function(self, bands: List[Tuple]) -> float:
+        for tier in self.tiers:
+            if all(req._eval_preference_function(bands) > 0.0 for req in tier["requirements"]):
+                return float(tier["score"])
+        return 0.0
+
+    def __repr__(self):
+        summaries = [f"(score={t['score']}, n_reqs={len(t['requirements'])})" for t in self.tiers]
+        return super().__repr__()[:-1] + f", tiers={summaries})"
+
+    def to_dict(self):
+        d = super().to_dict()
+        d['tiers'] = [
+            {"score": t["score"], "requirements": [r.to_dict() for r in t["requirements"]]}
+            for t in self.tiers
+        ]
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'TieredSpectralRequirement':
+        required_keys = ['req_type', 'strategy', 'tiers']
+        assert all(key in d for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        assert d.get("strategy").lower() == SpectralPreferenceStrategies.TIERED.value, \
+            f"Strategy does not match requirement definition. Must be '{SpectralPreferenceStrategies.TIERED.value}'"
+        tiers = [
+            {"score": t["score"],
+             "requirements": [SpectralRequirement.from_dict(r) for r in t["requirements"]]}
+            for t in d.get("tiers")
+        ]
+        return cls(tiers, d.get("id", None))
+
+    def __eq__(self, other):
+        if not (super().__eq__(other) and isinstance(other, TieredSpectralRequirement)):
+            return False
+        if len(self.tiers) != len(other.tiers):
+            return False
+        for t1, t2 in zip(self.tiers, other.tiers):
+            if abs(t1["score"] - t2["score"]) > 1e-6:
+                return False
+            if len(t1["requirements"]) != len(t2["requirements"]):
+                return False
+            if not all(r1 == r2 for r1, r2 in zip(t1["requirements"], t2["requirements"])):
+                return False
+        return True

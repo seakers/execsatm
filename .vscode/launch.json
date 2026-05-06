@@ -83,6 +83,18 @@
             "env": {
                 "PYTHONPATH": "${workspaceRoot}"
             }
+        },
+        {
+            "name": "TEST: Sectral Requirement Definition",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/spectral_requirement_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
         }
     ]
 }
