@@ -451,11 +451,14 @@ TIERED SPECTRAL REQUIREMENT
 """
 class TestTieredSpectralRequirement(unittest.TestCase):
     def setUp(self):
-        self.tier1_req = SpectralBandCountRequirement((8000, 12000), [5], [0.0, 1.0])  # range in nm (TIR)
-        self.tier2_req = SpectralBandCountRequirement((8000, 12000), [3], [0.0, 1.0])  # range in nm (TIR)
+        # Two-tier fixture: tier1 requires fine resolution AND full range (score=1.0);
+        # tier2 requires only full range as a fallback (score=0.5).
+        # Preference = tier_score × product(sub_req.prefs) for first tier where product > 0.
+        self.res_req   = SpectralResolutionRequirement((380, 1000), [5], [1.0, 0.0])  # binary: ≤5nm → 1.0
+        self.range_req = SpectralRangeRequirement(380.0, 2500.0)                       # binary: covers range → 1.0
         self.tiers = [
-            {"score": 1.0, "requirements": [self.tier1_req]},
-            {"score": 0.5, "requirements": [self.tier2_req]},
+            {"score": 1.0, "requirements": [self.res_req, self.range_req]},  # fine res + full range
+            {"score": 0.5, "requirements": [self.range_req]},                 # full range only (fallback)
         ]
         self.req = TieredSpectralRequirement(tiers=self.tiers)
 
@@ -467,9 +470,10 @@ class TestTieredSpectralRequirement(unittest.TestCase):
         self.assertEqual(len(self.req.tiers), 2)
 
         # multiple requirements in a single tier is valid
+        band_req = SpectralBandCountRequirement((380, 1000), [3], [0.0, 1.0])  # nm
         multi_req = TieredSpectralRequirement(tiers=[{
             "score": 1.0,
-            "requirements": [self.tier1_req, self.tier2_req],
+            "requirements": [self.res_req, band_req],
         }])
         self.assertEqual(len(multi_req.tiers[0]["requirements"]), 2)
 
@@ -482,7 +486,7 @@ class TestTieredSpectralRequirement(unittest.TestCase):
 
         # invalid tier: missing "score"
         self.assertRaises(AssertionError, TieredSpectralRequirement,
-                          tiers=[{"requirements": [self.tier1_req]}])
+                          tiers=[{"requirements": [self.res_req]}])
 
         # invalid tier: missing "requirements"
         self.assertRaises(AssertionError, TieredSpectralRequirement,
@@ -490,7 +494,7 @@ class TestTieredSpectralRequirement(unittest.TestCase):
 
         # invalid tier: score out of [0, 1]
         self.assertRaises(AssertionError, TieredSpectralRequirement,
-                          tiers=[{"score": 1.5, "requirements": [self.tier1_req]}])
+                          tiers=[{"score": 1.5, "requirements": [self.res_req]}])
 
         # invalid tier: requirements not SpectralRequirement instances
         self.assertRaises(AssertionError, TieredSpectralRequirement,
@@ -498,8 +502,8 @@ class TestTieredSpectralRequirement(unittest.TestCase):
 
         # invalid tier: scores not in descending order
         self.assertRaises(AssertionError, TieredSpectralRequirement, tiers=[
-            {"score": 0.5, "requirements": [self.tier2_req]},
-            {"score": 1.0, "requirements": [self.tier1_req]},  # ascending → invalid
+            {"score": 0.5, "requirements": [self.range_req]},
+            {"score": 1.0, "requirements": [self.res_req, self.range_req]},  # ascending → invalid
         ])
 
         # invalid id
@@ -509,32 +513,57 @@ class TestTieredSpectralRequirement(unittest.TestCase):
                           tiers=self.tiers, id="123")
 
     def test_get_preference(self):
-        # tier1: ≥5 bands in 8000–12000 nm → 1.0; tier2: ≥3 bands → 0.5; else → 0.0
-        five_bands  = [(8500,500,100),(9500,500,100),(10500,500,100),(11500,500,100),(12000,500,100)]  # nm
-        three_bands = [(8500,500,100),(10000,500,100),(11500,500,100)]                                 # nm
-        one_band    = [(9000,500,100)]                                                                 # nm
-        vnir_bands  = [(500,100,10),(700,100,10)]  # centers outside 8000–12000 nm → 0.0
+        # tier1 (score=1.0): res_req AND range_req  → value = 1.0 × res.pref × range.pref
+        # tier2 (score=0.5): range_req only          → value = 0.5 × range.pref
+        # returns value of first tier where value > 0
 
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, five_bands),  1.0)
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, three_bands), 0.5)
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, one_band),    0.0)
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, vnir_bands),  0.0)
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, []),          0.0)
+        # bands covering 380–2500 nm (lower edge=380, upper=2505) with 5nm resolution
+        fine_in_range  = [(380, 10, 5), (2500, 10, 5)]   # res=5nm, covers 380–2505nm
+        # bands covering 380–2500 nm but coarser resolution
+        coarse_in_range = [(380, 10, 15), (2500, 10, 5)]  # res=15nm (>5nm threshold)
+        # bands NOT covering the required range (upper edge only 850nm)
+        fine_no_range  = [(500, 100, 5), (800, 100, 5)]
 
-        # tier with multiple simultaneous requirements: both must pass
-        tir_req  = SpectralBandCountRequirement((8000, 12000), [3], [0.0, 1.0])  # TIR range, nm
+        # fine res + range ok: tier1 = 1.0 × 1.0 × 1.0 = 1.0 → return 1.0
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, fine_in_range),   1.0)
+        # coarse res + range ok: tier1 = 1.0 × 0.0 × 1.0 = 0; tier2 = 0.5 × 1.0 = 0.5 → return 0.5
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, coarse_in_range), 0.5)
+        # fine res + range not ok: tier1 = 1.0 × 1.0 × 0.0 = 0; tier2 = 0.5 × 0.0 = 0 → return 0.0
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, fine_no_range),   0.0)
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, []),              0.0)
+
+        # sub-requirements with intermediate scores (non-binary): product scales the tier score
+        inter_res = SpectralResolutionRequirement((380, 1000), [5, 10], [1.0, 0.5, 0.0])  # nm
+        inter_req = TieredSpectralRequirement(tiers=[
+            {"score": 1.0, "requirements": [inter_res, self.range_req]},
+        ])
+        # band (500, 240, *): edges 380–620 nm (within VNIR filter); band (2500, 10, 5): edges 2495–2505 nm
+        # range_req: instrument_min=380 ≤ 380, instrument_max=2505 ≥ 2500 → 1.0
+        fine_in_range2 = [(500, 240, 5), (2500, 10, 5)]  # VNIR res=5nm → inter_res 1.0; range 1.0
+        coarse_in_range2 = [(500, 240, 8), (2500, 10, 5)]  # VNIR res=8nm → inter_res 0.5; range 1.0
+        # fine_in_range2: tier1 = 1.0 × 1.0 × 1.0 = 1.0
+        self.assertAlmostEqual(inter_req.calc_preference(ATTRIBUTE, fine_in_range2), 1.0)
+        # coarse_in_range2: tier1 = 1.0 × 0.5 × 1.0 = 0.5 > 0 → return 0.5 (intermediate product)
+        self.assertAlmostEqual(inter_req.calc_preference(ATTRIBUTE, coarse_in_range2), 0.5)
+
+        # simultaneous sub-requirements: both must yield > 0 for the tier to pass
+        tir_req  = SpectralBandCountRequirement((8000, 12000), [5], [0.0, 1.0])  # TIR range, nm
         mwir_req = SpectralBandCountRequirement((3000, 4500),  [1], [0.0, 1.0])  # MWIR range, nm
         multi_tier = TieredSpectralRequirement(tiers=[
             {"score": 1.0, "requirements": [tir_req, mwir_req]},
+            {"score": 0.5, "requirements": [tir_req]},
         ])
-        tir_only  = three_bands                                      # no MWIR band
-        both_reqs = three_bands + [(3500, 200, 100)]                 # TIR + one MWIR band (center=3500nm)
-        self.assertAlmostEqual(multi_tier.calc_preference(ATTRIBUTE, tir_only),  0.0)
-        self.assertAlmostEqual(multi_tier.calc_preference(ATTRIBUTE, both_reqs), 1.0)
+        five_tir_mwir = [(8500,500,100),(9500,500,100),(10500,500,100),(11500,500,100),(12000,500,100),(3500,200,100)]
+        five_tir_only = [(8500,500,100),(9500,500,100),(10500,500,100),(11500,500,100),(12000,500,100)]
+        few_tir       = [(9000, 500, 100)]
+        # tier1 requires BOTH TIR and MWIR; tier2 requires only TIR
+        self.assertAlmostEqual(multi_tier.calc_preference(ATTRIBUTE, five_tir_mwir), 1.0)  # tier1 passes
+        self.assertAlmostEqual(multi_tier.calc_preference(ATTRIBUTE, five_tir_only), 0.5)  # tier1 fails, tier2 passes
+        self.assertAlmostEqual(multi_tier.calc_preference(ATTRIBUTE, few_tir),       0.0)  # both fail
 
         # wrong attribute
-        self.assertRaises(AssertionError, self.req.calc_preference, 12345, five_bands)
-        self.assertRaises(AssertionError, self.req.calc_preference, "wrong_attr", five_bands)
+        self.assertRaises(AssertionError, self.req.calc_preference, 12345, fine_in_range)
+        self.assertRaises(AssertionError, self.req.calc_preference, "wrong_attr", fine_in_range)
 
         # invalid band list
         self.assertRaises(AssertionError, self.req.calc_preference, ATTRIBUTE, "not_a_list")
@@ -543,7 +572,7 @@ class TestTieredSpectralRequirement(unittest.TestCase):
     def test_representation(self):
         expected = (
             "SpectralRequirement(strategy=TIERED, "
-            "tiers=[(score=1.0, n_reqs=1), (score=0.5, n_reqs=1)])"
+            "tiers=[(score=1.0, n_reqs=2), (score=0.5, n_reqs=1)])"
         )
         self.assertEqual(repr(self.req), expected)
 
@@ -556,8 +585,14 @@ class TestTieredSpectralRequirement(unittest.TestCase):
         self.assertEqual(len(d["tiers"]), 2)
         self.assertAlmostEqual(d["tiers"][0]["score"], 1.0)
         self.assertAlmostEqual(d["tiers"][1]["score"], 0.5)
-        self.assertEqual(len(d["tiers"][0]["requirements"]), 1)
+        self.assertEqual(len(d["tiers"][0]["requirements"]), 2)
         self.assertEqual(len(d["tiers"][1]["requirements"]), 1)
+        self.assertEqual(d["tiers"][0]["requirements"][0]["strategy"],
+                         SpectralPreferenceStrategies.RESOLUTION.value)
+        self.assertEqual(d["tiers"][0]["requirements"][1]["strategy"],
+                         SpectralPreferenceStrategies.RANGE.value)
+        self.assertEqual(d["tiers"][1]["requirements"][0]["strategy"],
+                         SpectralPreferenceStrategies.RANGE.value)
 
     def test_from_dict(self):
         req_dict = {
@@ -567,25 +602,35 @@ class TestTieredSpectralRequirement(unittest.TestCase):
             "tiers": [
                 {
                     "score": 1.0,
-                    "requirements": [{
-                        "req_type": RequirementTypes.SPECTRAL.value,
-                        "attribute": ATTRIBUTE,
-                        "strategy": SpectralPreferenceStrategies.BAND_COUNT.value,
-                        "wavelength_range": [8000, 12000],
-                        "thresholds": [5],
-                        "scores": [0.0, 1.0],
-                    }],
+                    "requirements": [
+                        {
+                            "req_type": RequirementTypes.SPECTRAL.value,
+                            "attribute": ATTRIBUTE,
+                            "strategy": SpectralPreferenceStrategies.RESOLUTION.value,
+                            "wavelength_range": [380, 1000],
+                            "thresholds": [5],
+                            "scores": [1.0, 0.0],
+                        },
+                        {
+                            "req_type": RequirementTypes.SPECTRAL.value,
+                            "attribute": ATTRIBUTE,
+                            "strategy": SpectralPreferenceStrategies.RANGE.value,
+                            "required_min_nm": 380.0,
+                            "required_max_nm": 2500.0,
+                        },
+                    ],
                 },
                 {
                     "score": 0.5,
-                    "requirements": [{
-                        "req_type": RequirementTypes.SPECTRAL.value,
-                        "attribute": ATTRIBUTE,
-                        "strategy": SpectralPreferenceStrategies.BAND_COUNT.value,
-                        "wavelength_range": [8000, 12000],
-                        "thresholds": [3],
-                        "scores": [0.0, 1.0],
-                    }],
+                    "requirements": [
+                        {
+                            "req_type": RequirementTypes.SPECTRAL.value,
+                            "attribute": ATTRIBUTE,
+                            "strategy": SpectralPreferenceStrategies.RANGE.value,
+                            "required_min_nm": 380.0,
+                            "required_max_nm": 2500.0,
+                        },
+                    ],
                 },
             ],
         }
@@ -595,7 +640,9 @@ class TestTieredSpectralRequirement(unittest.TestCase):
         self.assertEqual(len(r.tiers), 2)
         self.assertAlmostEqual(r.tiers[0]["score"], 1.0)
         self.assertAlmostEqual(r.tiers[1]["score"], 0.5)
-        self.assertIsInstance(r.tiers[0]["requirements"][0], SpectralBandCountRequirement)
+        self.assertIsInstance(r.tiers[0]["requirements"][0], SpectralResolutionRequirement)
+        self.assertIsInstance(r.tiers[0]["requirements"][1], SpectralRangeRequirement)
+        self.assertIsInstance(r.tiers[1]["requirements"][0], SpectralRangeRequirement)
         self.assertNotEqual(r.id, self.req.id)
 
         # parent class method

@@ -1823,20 +1823,23 @@ class TieredSpectralRequirement(SpectralRequirement):
         """
         ### Tiered Spectral Requirement
 
-        Evaluates an ordered list of tiers from best (highest score) to worst. Returns the
-        score of the first tier in which every sub-requirement returns > 0.0, or 0.0 if no
-        tier passes. Use this to express "ideally X, or at least Y" compound requirements.
+        Evaluates an ordered list of tiers from best (highest score) to worst. For each tier
+        the preference value is `tier_score x product(sub_req.pref for sub_req in requirements)`.
+        The returned value is taken from the **first** tier where that product is > 0; if no
+        tier passes, 0.0 is returned. Use this to express "ideally X, or at least Y" compound
+        requirements where sub-requirements within each tier must be jointly satisfied.
 
-        Example — "ideally ≥5 bands in 8–12 µm, at least ≥3 bands":
+        Example — "ideally ≤5 nm resolution AND full VNIR range; at least full VNIR range":
         ```python
         TieredSpectralRequirement(tiers=[
-            {"score": 1.0, "requirements": [SpectralBandCountRequirement((8000, 12000), [5], [0.0, 1.0])]},
-            {"score": 0.5, "requirements": [SpectralBandCountRequirement((8000, 12000), [3], [0.0, 1.0])]},
+            {"score": 1.0, "requirements": [SpectralResolutionRequirement((380, 1000), [5], [1.0, 0.0]),
+                                            SpectralRangeRequirement(380.0, 2500.0)]},
+            {"score": 0.5, "requirements": [SpectralRangeRequirement(380.0, 2500.0)]},
         ])
         ```
         - :`tiers`: List of dicts in descending score order, each containing:
-            - `"score"` (float ∈ [0, 1]): preference value returned when this tier activates.
-            - `"requirements"` (List[SpectralRequirement]): all must pass (return > 0.0).
+            - `"score"` (float ∈ [0, 1]): multiplied by the product of sub-requirement preferences.
+            - `"requirements"` (List[SpectralRequirement]): all preferences are multiplied together.
         - :`id`: Optional unique identifier.
         """
         super().__init__(SpectralPreferenceStrategies.TIERED.value, id)
@@ -1859,8 +1862,12 @@ class TieredSpectralRequirement(SpectralRequirement):
 
     def _eval_preference_function(self, bands: List[Tuple]) -> float:
         for tier in self.tiers:
-            if all(req._eval_preference_function(bands) > 0.0 for req in tier["requirements"]):
-                return float(tier["score"])
+            product = 1.0
+            for req in tier["requirements"]:
+                product *= req._eval_preference_function(bands)
+            value = tier["score"] * product
+            if value > 0.0:
+                return value
         return 0.0
 
     def __repr__(self):

@@ -1,20 +1,5 @@
 {
-    "WQ-CHA-VNIR-R3": {
-        "req_type": "spectral",
-        "attribute": "spectral_bands",
-        "strategy": "spectral_resolution",
-        "wavelength_range": [380, 1000],
-        "thresholds": [5],
-        "scores": [1.0, 0.0]
-    },
-    "WQ-CHA-VNIR-R4": {
-        "req_type": "spectral",
-        "attribute": "spectral_bands",
-        "strategy": "spectral_range",
-        "required_min_nm": 380,
-        "required_max_nm": 2500
-    },
-    "WQ-TMP-VNIR-R3": {
+    "WQ-CHA-VNIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
         "strategy": "tiered",
@@ -29,32 +14,46 @@
                         "wavelength_range": [380, 1000],
                         "thresholds": [5],
                         "scores": [1.0, 0.0]
-                    }
-                ]
-            },
-            {
-                "score": 0.5,
-                "requirements": [
+                    },
                     {
                         "req_type": "spectral",
                         "attribute": "spectral_bands",
-                        "strategy": "spectral_resolution",
-                        "wavelength_range": null,
-                        "thresholds": [10],
-                        "scores": [1.0, 0.0]
+                        "strategy": "spectral_range",
+                        "required_min_nm": 380,
+                        "required_max_nm": 2500
                     }
                 ]
             }
         ]
     },
-    "WQ-TMP-VNIR-R4": {
+    "WQ-TMP-VNIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
-        "strategy": "spectral_range",
-        "required_min_nm": 380,
-        "required_max_nm": 2500
+        "strategy": "tiered",
+        "tiers": [
+            {
+                "score": 1.0,
+                "requirements": [
+                    {
+                        "req_type": "spectral",
+                        "attribute": "spectral_bands",
+                        "strategy": "spectral_resolution",
+                        "wavelength_range": [380, 1000],
+                        "thresholds": [5, 10],
+                        "scores": [1.0, 0.5, 0.0]
+                    },
+                    {
+                        "req_type": "spectral",
+                        "attribute": "spectral_bands",
+                        "strategy": "spectral_range",
+                        "required_min_nm": 380,
+                        "required_max_nm": 2500
+                    }
+                ]
+            }
+        ]
     },
-    "WQ-TMP-TIR-R3": {
+    "WQ-TMP-TIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
         "strategy": "tiered",
@@ -95,7 +94,7 @@
             }
         ]
     },
-    "FL-TSS-VNIR-R3": {
+    "FL-TSS-VNIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
         "strategy": "tiered",
@@ -108,47 +107,21 @@
                         "attribute": "spectral_bands",
                         "strategy": "spectral_resolution",
                         "wavelength_range": [380, 1000],
-                        "thresholds": [5],
-                        "scores": [1.0, 0.0]
-                    }
-                ]
-            },
-            {
-                "score": 0.67,
-                "requirements": [
+                        "thresholds": [5, 10],
+                        "scores": [1.0, 0.67, 0.0]
+                    },
                     {
                         "req_type": "spectral",
                         "attribute": "spectral_bands",
-                        "strategy": "spectral_resolution",
-                        "wavelength_range": [380, 1000],
-                        "thresholds": [10],
-                        "scores": [1.0, 0.0]
-                    }
-                ]
-            },
-            {
-                "score": 0.33,
-                "requirements": [
-                    {
-                        "req_type": "spectral",
-                        "attribute": "spectral_bands",
-                        "strategy": "band_count",
-                        "wavelength_range": [380, 1000],
-                        "thresholds": [2],
-                        "scores": [0.0, 1.0]
+                        "strategy": "spectral_range",
+                        "required_min_nm": 380,
+                        "required_max_nm": 2500
                     }
                 ]
             }
         ]
     },
-    "FL-TSS-VNIR-R4": {
-        "req_type": "spectral",
-        "attribute": "spectral_bands",
-        "strategy": "spectral_range",
-        "required_min_nm": 380,
-        "required_max_nm": 2500
-    },
-    "FL-TMP-VNIR-R3": {
+    "FL-TMP-VNIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
         "strategy": "tiered",
@@ -163,32 +136,19 @@
                         "wavelength_range": [380, 1000],
                         "thresholds": [30],
                         "scores": [1.0, 0.0]
-                    }
-                ]
-            },
-            {
-                "score": 0.5,
-                "requirements": [
+                    },
                     {
                         "req_type": "spectral",
                         "attribute": "spectral_bands",
-                        "strategy": "band_count",
-                        "wavelength_range": [380, 1000],
-                        "thresholds": [2],
-                        "scores": [0.0, 1.0]
+                        "strategy": "spectral_range",
+                        "required_min_nm": 380,
+                        "required_max_nm": 2500
                     }
                 ]
             }
         ]
     },
-    "FL-TMP-VNIR-R4": {
-        "req_type": "spectral",
-        "attribute": "spectral_bands",
-        "strategy": "spectral_range",
-        "required_min_nm": 380,
-        "required_max_nm": 2500
-    },
-    "FL-TMP-TIR-R3": {
+    "FL-TMP-TIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
         "strategy": "tiered",
@@ -229,37 +189,61 @@
             }
         ]
     },
-    "FR-TMP-TIR-R3": {
+    "FR-TMP-TIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
-        "strategy": "spectral_resolution",
-        "wavelength_range": [3400, 4200],
-        "thresholds": [100],
-        "scores": [1.0, 0.0]
+        "strategy": "tiered",
+        "tiers": [
+            {
+                "score": 1.0,
+                "requirements": [
+                    {
+                        "req_type": "spectral",
+                        "attribute": "spectral_bands",
+                        "strategy": "spectral_resolution",
+                        "wavelength_range": [3400, 4200],
+                        "thresholds": [100],
+                        "scores": [1.0, 0.0]
+                    },
+                    {
+                        "req_type": "spectral",
+                        "attribute": "spectral_bands",
+                        "strategy": "spectral_range",
+                        "required_min_nm": 3400,
+                        "required_max_nm": 4200
+                    }
+                ]
+            }
+        ]
     },
-    "FR-TMP-TIR-R4": {
+    "FR-TMP-MIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
-        "strategy": "spectral_range",
-        "required_min_nm": 3400,
-        "required_max_nm": 4200
+        "strategy": "tiered",
+        "tiers": [
+            {
+                "score": 1.0,
+                "requirements": [
+                    {
+                        "req_type": "spectral",
+                        "attribute": "spectral_bands",
+                        "strategy": "spectral_resolution",
+                        "wavelength_range": [10400, 12300],
+                        "thresholds": [500],
+                        "scores": [1.0, 0.0]
+                    },
+                    {
+                        "req_type": "spectral",
+                        "attribute": "spectral_bands",
+                        "strategy": "spectral_range",
+                        "required_min_nm": 10400,
+                        "required_max_nm": 12300
+                    }
+                ]
+            }
+        ]
     },
-    "FR-TMP-MIR-R3": {
-        "req_type": "spectral",
-        "attribute": "spectral_bands",
-        "strategy": "spectral_resolution",
-        "wavelength_range": [10400, 12300],
-        "thresholds": [500],
-        "scores": [1.0, 0.0]
-    },
-    "FR-TMP-MIR-R4": {
-        "req_type": "spectral",
-        "attribute": "spectral_bands",
-        "strategy": "spectral_range",
-        "required_min_nm": 10400,
-        "required_max_nm": 12300
-    },
-    "FR-FRX-VNIR-R3": {
+    "FR-FRX-VNIR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
         "strategy": "tiered",
@@ -282,31 +266,14 @@
                         "wavelength_range": [840, 880],
                         "thresholds": [20],
                         "scores": [1.0, 0.0]
-                    }
-                ]
-            }
-        ]
-    },
-    "FR-FRX-VNIR-R4": {
-        "req_type": "spectral",
-        "attribute": "spectral_bands",
-        "strategy": "tiered",
-        "tiers": [
-            {
-                "score": 1.0,
-                "requirements": [
+                    },
                     {
                         "req_type": "spectral",
                         "attribute": "spectral_bands",
                         "strategy": "spectral_range",
                         "required_min_nm": 600,
                         "required_max_nm": 750
-                    }
-                ]
-            },
-            {
-                "score": 0.5,
-                "requirements": [
+                    },
                     {
                         "req_type": "spectral",
                         "attribute": "spectral_bands",
@@ -318,19 +285,31 @@
             }
         ]
     },
-    "FR-FRX-SAR-R3": {
+    "FR-FRX-SAR": {
         "req_type": "spectral",
         "attribute": "spectral_bands",
-        "strategy": "spectral_resolution",
-        "wavelength_range": [3400, 4200],
-        "thresholds": [100],
-        "scores": [1.0, 0.0]
-    },
-    "FR-FRX-SAR-R4": {
-        "req_type": "spectral",
-        "attribute": "spectral_bands",
-        "strategy": "spectral_range",
-        "required_min_nm": 3400,
-        "required_max_nm": 4200
+        "strategy": "tiered",
+        "tiers": [
+            {
+                "score": 1.0,
+                "requirements": [
+                    {
+                        "req_type": "spectral",
+                        "attribute": "spectral_bands",
+                        "strategy": "spectral_resolution",
+                        "wavelength_range": [3400, 4200],
+                        "thresholds": [100],
+                        "scores": [1.0, 0.0]
+                    },
+                    {
+                        "req_type": "spectral",
+                        "attribute": "spectral_bands",
+                        "strategy": "spectral_range",
+                        "required_min_nm": 3400,
+                        "required_max_nm": 4200
+                    }
+                ]
+            }
+        ]
     }
 }
