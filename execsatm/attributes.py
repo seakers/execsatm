@@ -13,6 +13,7 @@ class ObservationRequirementAttributes(Enum):
     SPATIAL_RESOLUTION_CROSS_TRACK = 'ground pixel cross-track resolution [m]'
     SPATIAL_RESOLUTION_ALONG_TRACK = 'ground pixel along-track resolution [m]'
     SPECTRAL_RESOLUTION = 'spectral_resolution'
+    SPECTRAL_BANDS = 'spectral_bands'
     ACCURACY = 'accuracy [m]'
     RANGE = 'observation range [km]'
     SNR = 'snr [dB]'
