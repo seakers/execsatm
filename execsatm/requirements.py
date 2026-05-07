@@ -905,7 +905,8 @@ class IntervalInterpolationRequirement(PerformanceRequirement):
         assert len(thresholds) == len(scores), "Intervals and scores must have the same length"
         for interval in thresholds:
             assert isinstance(interval, (int, float)), "Intervals must be numeric"
-        assert all(thresholds[i] <= thresholds[i + 1] for i in range(len(thresholds) - 1)), "All values in `intervals` must be ascending."
+        assert all(thresholds[i] <= thresholds[i + 1] for i in range(len(thresholds) - 1)), \
+            "All values in `intervals` must be ascending."
         for score in scores:
             assert isinstance(score, (int, float)), "Scores must be numeric"
             assert 0.0 <= score <= 1.0, "Scores must be in [0, 1]"
