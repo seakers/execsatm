@@ -333,8 +333,8 @@ SPECTRAL RANGE REQUIREMENT
 """
 class TestSpectralRangeRequirement(unittest.TestCase):
     def setUp(self):
-        self.required_min_nm = 380.0   # nm — instrument lower edge must be ≤ this
-        self.required_max_nm = 2500.0  # nm — instrument upper edge must be ≥ this
+        self.required_min_nm = 380.0   # nm — lower edge of required spectral window
+        self.required_max_nm = 2500.0  # nm — upper edge of required spectral window
         self.req = SpectralRangeRequirement(
             required_min_nm=self.required_min_nm,
             required_max_nm=self.required_max_nm,
@@ -371,27 +371,41 @@ class TestSpectralRangeRequirement(unittest.TestCase):
                           required_max_nm=self.required_max_nm, id="123")
 
     def test_get_preference(self):
-        # edge wavelengths: lower = center - bandwidth/2, upper = center + bandwidth/2 (nm)
-        # wide: lower edge = 375nm, upper edge = 2550nm → covers [380, 2500] nm → 1.0
-        wide   = [(500, 250, 10), (1500, 500, 20), (2400, 300, 30)]
-        # exact: lower edge = 375nm (380-10/2), upper edge = 2505nm (2500+10/2) → 1.0
-        exact  = [(380, 10, 5), (2500, 10, 5)]
-        # narrow: upper edge = 850nm < 2500nm → 0.0
-        narrow = [(500, 100, 10), (800, 100, 10)]
-        # no low end: lower edge = 550nm > 380nm → 0.0
-        no_low = [(600, 100, 10), (2500, 10, 5)]
-        # empty band list → 0.0
-        empty  = []
+        # Returns min(1.0, overlap / FWHM) for the best-matching band.
+        # overlap = intersection width of [center ± bw/2] with [required_min, required_max].
 
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, wide),   1.0)
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, exact),  1.0)
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, narrow), 0.0)
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, no_low), 0.0)
-        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, empty),  0.0)
+        # well inside required range: overlap (200nm) >> FWHM (10nm) → 1.0
+        inside     = [(1000, 200, 10)]   # coverage=[900,1100]; overlap=200; 200/10=20 → 1.0
+
+        # edge: overlap exactly == FWHM → 1.0
+        edge_full  = [(370, 40, 10)]     # coverage=[350,390]; overlap=[380,390]=10; 10/10=1.0
+
+        # partial: overlap (2nm) < FWHM (10nm) → partial credit
+        partial    = [(376, 12, 10)]     # coverage=[370,382]; overlap=[380,382]=2; 2/10=0.2
+
+        # entirely below required window → 0.0
+        below      = [(200, 100, 5)]     # coverage=[150,250]; no overlap with [380,2500]
+
+        # entirely above required window → 0.0
+        above      = [(3000, 100, 5)]    # coverage=[2950,3050]; no overlap with [380,2500]
+
+        # empty band list → 0.0
+        empty      = []
+
+        # best of multiple bands: first misses, second hits cleanly → 1.0
+        multi      = [(200, 10, 5), (400, 20, 10)]  # second: coverage=[390,410]; overlap=20; 20/10=2→1.0
+
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, inside),    1.0)
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, edge_full), 1.0)
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, partial),   0.2)
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, below),     0.0)
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, above),     0.0)
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, empty),     0.0)
+        self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, multi),     1.0)
 
         # wrong attribute
-        self.assertRaises(AssertionError, self.req.calc_preference, 12345, wide)
-        self.assertRaises(AssertionError, self.req.calc_preference, "wrong_attr", wide)
+        self.assertRaises(AssertionError, self.req.calc_preference, 12345, inside)
+        self.assertRaises(AssertionError, self.req.calc_preference, "wrong_attr", inside)
 
         # invalid band list
         self.assertRaises(AssertionError, self.req.calc_preference, ATTRIBUTE, "not_a_list")
@@ -455,7 +469,7 @@ class TestTieredSpectralRequirement(unittest.TestCase):
         # tier2 requires only full range as a fallback (score=0.5).
         # Preference = tier_score × product(sub_req.prefs) for first tier where product > 0.
         self.res_req   = SpectralResolutionRequirement((380, 1000), [5], [1.0, 0.0])  # binary: ≤5nm → 1.0
-        self.range_req = SpectralRangeRequirement(380.0, 2500.0)                       # binary: covers range → 1.0
+        self.range_req = SpectralRangeRequirement(380.0, 2500.0)                       # graded: min(1, overlap/FWHM) for best band
         self.tiers = [
             {"score": 1.0, "requirements": [self.res_req, self.range_req]},  # fine res + full range
             {"score": 0.5, "requirements": [self.range_req]},                 # full range only (fallback)
@@ -521,14 +535,14 @@ class TestTieredSpectralRequirement(unittest.TestCase):
         fine_in_range  = [(380, 10, 5), (2500, 10, 5)]   # res=5nm, covers 380–2505nm
         # bands covering 380–2500 nm but coarser resolution
         coarse_in_range = [(380, 10, 15), (2500, 10, 5)]  # res=15nm (>5nm threshold)
-        # bands NOT covering the required range (upper edge only 850nm)
-        fine_no_range  = [(500, 100, 5), (800, 100, 5)]
+        # bands entirely outside the required range [380, 2500] nm
+        fine_no_range  = [(200, 10, 5), (300, 10, 5)]
 
         # fine res + range ok: tier1 = 1.0 × 1.0 × 1.0 = 1.0 → return 1.0
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, fine_in_range),   1.0)
         # coarse res + range ok: tier1 = 1.0 × 0.0 × 1.0 = 0; tier2 = 0.5 × 1.0 = 0.5 → return 0.5
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, coarse_in_range), 0.5)
-        # fine res + range not ok: tier1 = 1.0 × 1.0 × 0.0 = 0; tier2 = 0.5 × 0.0 = 0 → return 0.0
+        # no range overlap: tier1 = 1.0 × 0.0 × 0.0 = 0; tier2 = 0.5 × 0.0 = 0 → return 0.0
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, fine_no_range),   0.0)
         self.assertAlmostEqual(self.req.calc_preference(ATTRIBUTE, []),              0.0)
 
@@ -537,8 +551,7 @@ class TestTieredSpectralRequirement(unittest.TestCase):
         inter_req = TieredSpectralRequirement(tiers=[
             {"score": 1.0, "requirements": [inter_res, self.range_req]},
         ])
-        # band (500, 240, *): edges 380–620 nm (within VNIR filter); band (2500, 10, 5): edges 2495–2505 nm
-        # range_req: instrument_min=380 ≤ 380, instrument_max=2505 ≥ 2500 → 1.0
+        # band (500, 240, *): coverage=[380,620]; overlap with [380,2500]=240nm >> FWHM → range_req=1.0
         fine_in_range2 = [(500, 240, 5), (2500, 10, 5)]  # VNIR res=5nm → inter_res 1.0; range 1.0
         coarse_in_range2 = [(500, 240, 8), (2500, 10, 5)]  # VNIR res=8nm → inter_res 0.5; range 1.0
         # fine_in_range2: tier1 = 1.0 × 1.0 × 1.0 = 1.0

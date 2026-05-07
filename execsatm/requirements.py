@@ -1766,13 +1766,14 @@ class SpectralRangeRequirement(SpectralRequirement):
         """
         ### Spectral Range Requirement
 
-        Evaluates whether the instrument's spectral span encompasses
-        `[required_min_nm, required_max_nm]`. Edge wavelengths are derived from each
-        band as `center ± bandwidth/2`. Returns 1.0 when both endpoints are satisfied
-        (`instrument_min <= required_min_nm` and `instrument_max >= required_max_nm`),
-        0.0 otherwise. Instruments that extend beyond the reference range also score 1.0.
-        - :`required_min_nm`: Instrument lower edge must be ≤ this value (nm).
-        - :`required_max_nm`: Instrument upper edge must be ≥ this value (nm).
+        Evaluates whether any instrument band overlaps `[required_min_nm, required_max_nm]`
+        with enough overlap to be spectrally discernible. For each band, the overlap between
+        its coverage `[center +/- bandwidth/2]` and the required window is compared against the
+        band's FWHM (resolution). Returns `min(1.0, overlap / FWHM)` for the best-matching
+        band — 1.0 when overlap spans at least one full resolution element, partial credit for
+        narrower overlaps, 0.0 when no band reaches the required window.
+        - :`required_min_nm`: Lower edge of the required spectral window (nm).
+        - :`required_max_nm`: Upper edge of the required spectral window (nm).
         - :`id`: Optional unique identifier.
         """
         super().__init__(SpectralPreferenceStrategies.RANGE.value, id)
@@ -1787,11 +1788,13 @@ class SpectralRangeRequirement(SpectralRequirement):
 
     def _eval_preference_function(self, bands: List[Tuple]) -> float:
         self._validate_bands(bands)
-        if not bands:
-            return 0.0
-        instrument_min = min(b[0] - b[1] / 2.0 for b in bands)
-        instrument_max = max(b[0] + b[1] / 2.0 for b in bands)
-        return 1.0 if (instrument_min <= self.required_min_nm and instrument_max >= self.required_max_nm) else 0.0
+        best = 0.0
+        for center_nm, bw_nm, fwhm_nm in bands:
+            band_lo = center_nm - bw_nm / 2.0
+            band_hi = center_nm + bw_nm / 2.0
+            overlap = max(0.0, min(band_hi, self.required_max_nm) - max(band_lo, self.required_min_nm))
+            best = max(best, min(1.0, overlap / fwhm_nm))
+        return best
 
     def __repr__(self):
         return (super().__repr__()[:-1] +
