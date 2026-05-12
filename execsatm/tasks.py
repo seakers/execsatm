@@ -288,7 +288,6 @@ class EventObservationTask(GenericObservationTask):
             assert availability.left >= event.t_start and availability.right <= event.t_start + event.d_exp, \
                 "If event is specified, task availability must be within event duration."
         
-
         # Set attributes
         self.event : GeophysicalEvent = event
 
@@ -296,8 +295,11 @@ class EventObservationTask(GenericObservationTask):
         super().__init__(GenericObservationTask.EVENT, parameter, location, availability, priority, objective, id)
 
     def generate_id(self) -> str:
-        """ Generate a unique identifier for the task. `Mission-Parameter-Grid Index-Ground Point Index` """
-        return f"EventObservationTask-'{self.parameter}'@({self.location[0][2]},{self.location[0][3]})-EVENT-{self.event.id.split('-')[0] if self.event else 'None'}"
+        """ Generate a unique identifier for the task. Deterministic UUID from parameter, location, and event. """
+        # return f"EventObservationTask-'{self.parameter}'@({self.location[0][2]},{self.location[0][3]})-EVENT-{self.event.id.split('-')[0] if self.event else 'None'}"
+        event_id = self.event.id if self.event else 'None'
+        name = f"{self.parameter}|{self.objective.id}|{self.location[0][2]}|{self.location[0][3]}|{event_id}"
+        return str(uuid.uuid5(uuid.NAMESPACE_OID, name))
 
     def copy(self) -> object:
         """ Create a deep copy of the task. """
@@ -312,7 +314,8 @@ class EventObservationTask(GenericObservationTask):
         )
 
     def __repr__(self):
-        return self.id
+        # return self.id
+        return f"EventObservationTask-'{self.parameter}-{self.objective.id.split('-')[0]}'@({self.location[0][2]},{self.location[0][3]})-EVENT-{self.event.id.split('-')[0] if self.event else 'None'}"
     
     def to_dict(self) -> dict:
         """ Convert the task to a dictionary. """
