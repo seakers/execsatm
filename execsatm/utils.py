@@ -17,6 +17,8 @@ class Interval:
             raise AttributeError(f'`right_open` must be of type `bool`. is of type {type(right_open)}.')
         if left > right:
             raise ValueError('The right side of interval must be later than the left side of the interval.')
+        if (left_open or right_open) and abs(left - right) < 1e-6:
+            raise ValueError('The left and right bounds of the interval must be distinct.')
 
         # assign attributes
         self.left : float = left
@@ -32,11 +34,11 @@ class Interval:
         r = x < self.right if self.right_open else x < self.right or abs(self.right - x) < 1e-6        
         return l and r
 
-    def is_after(self, x : float) -> bool:
+    def starts_after(self, x : float) -> bool:
         """ checks if the interval starts after the value `x` """
         return x < self.left if self.left_open else (x < self.left or abs(self.left - x) < 1e-6)
 
-    def is_before(self, x : float) -> bool:
+    def ends_before(self, x : float) -> bool:
         """ checks if the interval ends before the value `x` """
         return self.right < x if self.right_open else (self.right < x or abs(self.right - x) < 1e-6)
 
