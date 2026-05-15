@@ -16,11 +16,12 @@ class ObservationRequirementAttributes(Enum):
     SPECTRAL_BANDS = 'spectral_bands'
     ACCURACY = 'accuracy [m]'
     RANGE = 'observation range [km]'
-    SNR = 'snr [dB]'
+    SNR = 'snr'
     LOOK_ANGLE = 'look_angle [deg]'
     INCIDENCE_ANGLE = 'incidence_angle [deg]'
     OFF_NADIR_ANGLE = 'off-nadir axis angle [deg]'
     ECLIPSE = 'eclipse'
+    SWATH_WIDTH = 'swath width [km]'
 
 class SpatialCoverageRequirementAttributes(Enum):
     LOCATION = 'location'

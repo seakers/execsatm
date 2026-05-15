@@ -992,6 +992,7 @@ CAPABILITY REQUIREMENT DEFINITIONS
 class CapabilityPreferenceStrategies(Enum):
     # Explicit categorical matching
     EXPLICIT = 'explicit'
+    CATEGORICAL = 'categorical'
 
 class CapabilityRequirement(MissionRequirement):
     def __init__(self, 
@@ -1035,6 +1036,8 @@ class CapabilityRequirement(MissionRequirement):
         # initiate approriate requirement 
         if strategy == CapabilityPreferenceStrategies.EXPLICIT.value:
             return ExplicitCapabilityRequirement.from_dict(d)
+        elif strategy == CapabilityPreferenceStrategies.CATEGORICAL.value:
+            return CategoricalCapabilityRequirement.from_dict(d)
         
         # Additional strategies can be implemented here
         raise NotImplementedError(f"Preference function for strategy '{strategy}' not yet supported.")
@@ -1113,7 +1116,73 @@ class ExplicitCapabilityRequirement(CapabilityRequirement):
         return super().__eq__(other) \
             and isinstance(other, ExplicitCapabilityRequirement) and \
                self.valid_values == other.valid_values
+    
+class CategoricalCapabilityRequirement(CapabilityRequirement):
+    def __init__(self, 
+                 attribute : str, 
+                 preference_mapping : Dict[str, float],
+                 id = None):
+        """
+        ### Categorical Capability Requirement
 
+        Initializes a requirement that assigns specific preference scores to different categorical values.
+        - :`attribute`: The attribute being measured (e.g., instrument type, agent type, etc.).
+        - :`preference_mapping`: A dictionary mapping categorical values (strings) to preference scores (floats in [0, 1]).
+        - :`id`: Optional unique identifier for the requirement. If not provided, a UUID will be generated.
+        """
+
+        # initiate parent class
+        super().__init__(attribute, CapabilityPreferenceStrategies.CATEGORICAL.value, id)
+
+        # validate inputs
+        assert isinstance(preference_mapping, dict), "Preference mapping must be a dictionary"
+        assert all(isinstance(key, str) for key in preference_mapping.keys()), "All keys in preference mapping must be strings"
+        assert all(isinstance(val, (int, float)) for val in preference_mapping.values()), "All values in preference mapping must be numeric"
+        assert all(0.0 <= val <= 1.0 for val in preference_mapping.values()), "All preference scores must be in [0, 1]"
+
+        # set attributes
+        self.valid_values : Dict[str, float] = {key.lower(): val for key, val in preference_mapping.items()}
+
+    def _eval_preference_function(self, value : str) -> float:
+        """Evaluate the preference function for a given capability value."""
+        
+        # validate inputs
+        assert isinstance(value, str), "Input value must be a string"
+
+        # normalize value to lowercase string
+        value = str(value).lower()  
+
+        # return preference value; default to 0.0 if value not found
+        return self.valid_values.get(value, 0.0)
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d["valid_values"] = dict(self.valid_values)
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Union[str, float]]) -> 'ExplicitCapabilityRequirement':
+        """Create an explicit capability requirement from a dictionary."""
+
+        # validate input dictionary
+        required_keys = ['req_type', 'attribute', 'valid_values']
+        assert all(key in d for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        assert d.get("strategy") == CapabilityPreferenceStrategies.CATEGORICAL.value, \
+            f"Strategy does not match requirement definition. Must be '{CapabilityPreferenceStrategies.CATEGORICAL.value}'"
+        
+        # unpack dictionary
+        attribute = d.get("attribute")
+        valid_values : dict = d.get("valid_values")
+        id = d.get("id", None)
+
+        # initiate requirement
+        return cls(attribute, valid_values, id)
+    
+    def __eq__(self, other):
+        return super().__eq__(other) \
+            and isinstance(other, CategoricalCapabilityRequirement) and \
+               self.valid_values == other.valid_values
 """
 ---------------------------------
 SPATIAL REQUIREMENT DEFINITIONS
