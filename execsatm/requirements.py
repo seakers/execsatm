@@ -16,6 +16,7 @@ class RequirementTypes(Enum):
     SPATIAL = 'spatial'
     PERFORMANCE = 'performance'
     SPECTRAL = 'spectral'
+    COORDINATION = 'coordination'
 
 class MissionRequirement(ABC):
     def __init__(self, req_type : str, attribute: str, id : str = None):
@@ -104,6 +105,8 @@ class MissionRequirement(ABC):
             return SpatialCoverageRequirement.from_dict(d)
         elif req_type.lower() == RequirementTypes.SPECTRAL.value:
             return SpectralRequirement.from_dict(d)
+        elif req_type.lower() == RequirementTypes.COORDINATION.value:
+            return CoordinationRequirement.from_dict(d)
 
         raise NotImplementedError(f"Requirement type '{req_type}' not yet supported.")
     
@@ -1982,3 +1985,124 @@ class TieredSpectralRequirement(SpectralRequirement):
             if not all(r1 == r2 for r1, r2 in zip(t1["requirements"], t2["requirements"])):
                 return False
         return True
+    
+"""
+---------------------------------
+COORDINATION REQUIREMENTS
+---------------------------------
+"""
+
+class CoordinationRequirement(MissionRequirement):
+    """Abstract base for coordination requirements. Dispatches from_dict() by attribute."""
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'CoordinationRequirement':
+        required_keys = ['req_type', 'attribute']
+        assert all(key in d for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        attribute = d.get("attribute", "").lower()
+        if attribute == CoObservationRequirement.ATTRIBUTE:
+            return CoObservationRequirement.from_dict(d)
+        raise NotImplementedError(f"Coordination attribute '{attribute}' not yet supported.")
+
+    @abstractmethod
+    def __eq__(self, other):
+        assert isinstance(other, MissionRequirement)
+        comp_attrs = ['req_type', 'attribute', 'id']
+        return all(getattr(self, attr) == getattr(other, attr) for attr in comp_attrs)
+
+    @abstractmethod
+    def to_dict(self):
+        return super().to_dict()
+
+    @abstractmethod
+    def __repr__(self):
+        pass
+
+
+class CoObservationRequirement(CoordinationRequirement):
+    """
+    ### Co-Observation Requirement
+
+    Scores a target based on how many distinct measurement types have observed it within
+    a `decorrelation_time` window ending at the most recent observation.
+
+    - `_eval_preference_function` receives `Dict[str, float]` mapping measurement type
+      names to their latest observation timestamps (any consistent unit, e.g. seconds).
+    - The count of types within the window is forwarded to an internal `PerformanceRequirement`
+      delegate that applies the chosen scoring strategy (e.g. `discrete_intervals`).
+    """
+    ATTRIBUTE = 'co_observations'
+
+    def __init__(self,
+                 decorrelation_time: float,
+                 scoring_req: 'PerformanceRequirement',
+                 id=None):
+        super().__init__(RequirementTypes.COORDINATION.value, self.ATTRIBUTE, id)
+
+        assert isinstance(decorrelation_time, (int, float)) and decorrelation_time > 0, \
+            "Decorrelation time must be a positive number"
+        assert isinstance(scoring_req, PerformanceRequirement), \
+            "scoring_req must be a PerformanceRequirement instance"
+
+        self.decorrelation_time: float = float(decorrelation_time)
+        self.strategy: str = scoring_req.strategy
+        self._scoring_req: PerformanceRequirement = scoring_req
+
+    def _eval_preference_function(self, observations: Dict[str, float]) -> float:
+        assert isinstance(observations, dict), \
+            "observations must be a dict mapping measurement type to latest observation time"
+
+        if not observations:
+            count = 0
+        else:
+            reference_time = max(observations.values())
+            count = sum(
+                1 for t in observations.values()
+                if reference_time - t <= self.decorrelation_time
+            )
+
+        return self._scoring_req._eval_preference_function(count)
+
+    def __repr__(self):
+        return (f"CoObservationRequirement(strategy={self.strategy}, "
+                f"decorrelation_time={self.decorrelation_time})")
+
+    def to_dict(self) -> Dict:
+        d = super().to_dict()
+        d['decorrelation_time [s]'] = self.decorrelation_time
+        strategy_d = self._scoring_req.to_dict()
+        d['strategy'] = strategy_d['strategy']
+        for key, val in strategy_d.items():
+            if key not in ('req_type', 'attribute', 'id', 'strategy'):
+                d[key] = val
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'CoObservationRequirement':
+        required_keys = ['req_type', 'attribute', 'strategy', 'decorrelation_time [s]']
+        assert all(key in d for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        assert d.get('attribute', '').lower() == cls.ATTRIBUTE, \
+            f"Attribute must be '{cls.ATTRIBUTE}'"
+
+        decorrelation_time = d['decorrelation_time [s]']
+
+        # Build a synthetic performance dict so we can delegate to existing strategy logic
+        perf_dict = {k: v for k, v in d.items() if k != 'decorrelation_time [s]'}
+        perf_dict['req_type'] = RequirementTypes.PERFORMANCE.value
+        scoring_req = PerformanceRequirement.from_dict(perf_dict)
+
+        return cls(decorrelation_time, scoring_req, d.get('id', None))
+
+    def __eq__(self, other):
+        if not (super().__eq__(other) and isinstance(other, CoObservationRequirement)):
+            return False
+        if abs(self.decorrelation_time - other.decorrelation_time) >= 1e-6:
+            return False
+        # Compare scoring strategy parameters by dict value, excluding identity fields
+        # (internal scoring reqs get fresh UUIDs so we cannot use _scoring_req.__eq__)
+        skip = {'req_type', 'attribute', 'id'}
+        self_params = {k: v for k, v in self._scoring_req.to_dict().items() if k not in skip}
+        other_params = {k: v for k, v in other._scoring_req.to_dict().items() if k not in skip}
+        return self_params == other_params
