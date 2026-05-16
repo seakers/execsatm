@@ -3,7 +3,7 @@ from enum import Enum
 class TemporalRequirementAttributes(Enum):
     DURATION = 'duration [s]'
     REVISIT_TIME = 'revisit_time [s]'
-    CO_OBSERVATION_TIME = 'coobservation_time [s]'
+    CO_OBSERVATIONS = 'co_observations'
     RESPONSE_TIME = 'response_time [s]'
     RESPONSE_TIME_NORM = 'response_time [normalized]'
     OBS_TIME = 't_img [s]'
