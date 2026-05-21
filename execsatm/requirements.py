@@ -539,12 +539,14 @@ class DeminishingReturnsRequirement(PerformanceRequirement):
         assert isinstance(value, int) and value > 0, \
             "Value must be a positive integer"
         
-        # calculate preference values of value and value-1
-        p_i_mins_1  = 1 / (1 + np.exp(-self.slope * (value - 1 - self.threshold)))
-        p_i = 1 / (1 + np.exp(-self.slope * (value - self.threshold)))
+        return self.slope**(value - 1) * (1 - self.slope)
+
+        # # calculate preference values of value and value-1
+        # p_i_mins_1  = 1 / (1 + np.exp(-self.slope * (value - 1 - self.threshold)))
+        # p_i = 1 / (1 + np.exp(-self.slope * (value - self.threshold)))
     
-        # return preference value
-        return max(0.0, p_i - p_i_mins_1)
+        # # return preference value
+        # return max(0.0, p_i - p_i_mins_1)
 
     def __repr__(self):
         return super().__repr__()[:-1] + f", slope={self.slope}, threshold={self.threshold})"
@@ -925,6 +927,8 @@ class IntervalInterpolationRequirement(PerformanceRequirement):
         # find if value is between two intervals and interpolate score
         if self.thresholds[-1] < value:
             return self.scores[-1]
+        elif value <= self.thresholds[0]:
+            return self.scores[0]
 
         # initialize previous values
         prev_threshold,prev_score = np.NINF, self.scores[0]
