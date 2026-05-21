@@ -72,6 +72,7 @@ class ObservationOpportunity:
         ## tasks and availability
         self.tasks = tasks
         self.id_to_task = {task.id : task for task in tasks}
+        self._event_types = set(task.event.event_type for task in tasks if hasattr(task, "event") and task.event is not None)
         self.availability = availability
         
         ## instrument information
@@ -112,27 +113,31 @@ class ObservationOpportunity:
     # -------------------------------------------
 
     def __eq__(self, other : 'ObservationOpportunity') -> bool:
-        assert isinstance(other, ObservationOpportunity), \
-            f"Can only compare with another `ObservationOpportunity`. is of type {type(other)}."
-        
-        my_dict = self.to_dict()
-        other_dict = other.to_dict()
-
-        for key in my_dict:
-            if key not in other_dict:
-                return False
-            if my_dict[key] != other_dict[key]:
-                if isinstance(my_dict[key], list) and isinstance(other_dict[key], list):
-                    if len(my_dict[key]) != len(other_dict[key]):
-                        return False
-                    for item1, item2 in zip(my_dict[key], other_dict[key]):
-                        if item1 != item2:
-                            for item_key in item1:
-                                if item_key not in item2 or item1[item_key] != item2[item_key]:
-                                    return False
+        if not isinstance(other, ObservationOpportunity):
+            return NotImplemented
+        return self.id == other.id
+    
+        # assert isinstance(other, ObservationOpportunity), \
+        #         f"Can only compare with another `ObservationOpportunity`. is of type {type(other)}."
             
-        
-        return self.to_dict() == other.to_dict()
+        #     my_dict = self.to_dict()
+        #     other_dict = other.to_dict()
+
+        #     for key in my_dict:
+        #         if key not in other_dict:
+        #             return False
+        #         if my_dict[key] != other_dict[key]:
+        #             if isinstance(my_dict[key], list) and isinstance(other_dict[key], list):
+        #                 if len(my_dict[key]) != len(other_dict[key]):
+        #                     return False
+        #                 for item1, item2 in zip(my_dict[key], other_dict[key]):
+        #                     if item1 != item2:
+        #                         for item_key in item1:
+        #                             if item_key not in item2 or item1[item_key] != item2[item_key]:
+        #                                 return False
+                
+            
+        #     return self.to_dict() == other.to_dict()
 
     def is_mutually_exclusive(self, other : 'ObservationOpportunity') -> bool:
         """ Check if two tasks are mutually exclusive. """
@@ -303,6 +308,13 @@ class ObservationOpportunity:
         tasks_are_available : bool = not merged_task_availability.is_empty()
         tasks_are_accessible : bool = tasks_are_available and merged_accessibility.is_subset(merged_task_availability)
 
+        # Check if tasks are related to the same event 
+        same_event_types = (len(self._event_types.intersection(other._event_types)) > 0
+                            or len(self._event_types) == 0 or len(other._event_types) == 0)
+        
+        if not same_event_types:
+            x = 1
+
         return (
             # not the same observation opportunity
             other is not self and
@@ -325,7 +337,9 @@ class ObservationOpportunity:
             # there exists overlap between the tasks' availability intervals
             tasks_are_available and
             # there merged accessibility is within the intersection of the parent tasks' availability intervals
-            tasks_are_accessible
+            tasks_are_accessible 
+            # they observe the same event types
+            and same_event_types
         ) 
     
     def merge(self, 
