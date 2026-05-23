@@ -145,6 +145,8 @@ class PerformancePreferenceStrategies(Enum):
     # Bounded
     GAUSSIAN = 'gaussian'
     TRIANGLE = 'triangle'
+    SIGMOID = 'sigmoid'
+    POWER = 'bounded_power'
     
     # Interval Threshold-Based
     STEPS = 'discrete_steps'
@@ -205,6 +207,12 @@ class PerformanceRequirement(MissionRequirement):
 
         elif strategy == PerformancePreferenceStrategies.EXP_DECAY.value:
             return ExpDecayRequirement.from_dict(d)
+
+        elif strategy == PerformancePreferenceStrategies.SIGMOID.value:
+            return SigmoidRequirement.from_dict(d)
+        
+        elif strategy == PerformancePreferenceStrategies.POWER.value:
+            return PowerRequirement.from_dict(d)
 
         elif strategy == PerformancePreferenceStrategies.GAUSSIAN.value:
             return GaussianRequirement.from_dict(d)
@@ -507,8 +515,7 @@ class LogThresholdRequirement(PerformanceRequirement):
 class DeminishingReturnsRequirement(PerformanceRequirement):
     def __init__(self, 
                  attribute : str, 
-                 slope : float, 
-                 threshold : float, 
+                 half_life : float, 
                  id = None
                 ):
         """
@@ -517,29 +524,33 @@ class DeminishingReturnsRequirement(PerformanceRequirement):
         Initializes a requirement that uses the derivative of a logarithmic threshold preference function.
         - :`req_type`: The type of requirement (e.g., "capability", "temporal", "spatial").
         - :`attribute`: The attribute being measured (e.g., "data collected", "observations made").
-        - :`slope`: The slope of the logarithmic function (higher values lead to steeper transitions). Must be positive.
-        - :`threshold`: The threshold value at which preference value is 0.5. Must be non-negative.
+        - :`half_life`: The half-life of the diminishing returns function. Must be positive.
         - :`id`: Optional unique identifier for the requirement. If not provided, a UUID will be generated.
         """
         # initiate parent class
         super().__init__(attribute, PerformancePreferenceStrategies.DEMINISHING_RETURNS.value, id)
         
         # validate inputs
-        assert isinstance(slope, (int, float)), "Slope must be a number"
-        assert slope > 0, "Slope must be positive"
-        assert isinstance(threshold, (int, float)), "Threshold must be a number"
-        assert threshold >= 0, "Threshold must be non-negative"
+        assert isinstance(half_life, (int, float)), "Half-life must be a number"
+        assert half_life > 0, "Half-life must be positive"
 
         # set attributes
-        self.slope : float = slope
-        self.threshold : float = threshold
+        self.half_life : float = half_life
     
     def _eval_preference_function(self, value : int) -> float:
         # validate inputs
         assert isinstance(value, int) and value > 0, \
             "Value must be a positive integer"
         
-        return self.slope**(value - 1) * (1 - self.slope)
+        # val = self.slope**(value - self.threshold) * (1 - self.slope)
+        val = 0.5**((value-1)/self.half_life)
+
+        if val < 0:
+            x = 1
+        if val > 1:
+            x = 1
+
+        return val
 
         # # calculate preference values of value and value-1
         # p_i_mins_1  = 1 / (1 + np.exp(-self.slope * (value - 1 - self.threshold)))
@@ -549,14 +560,14 @@ class DeminishingReturnsRequirement(PerformanceRequirement):
         # return max(0.0, p_i - p_i_mins_1)
 
     def __repr__(self):
-        return super().__repr__()[:-1] + f", slope={self.slope}, threshold={self.threshold})"
+        return super().__repr__()[:-1] + f", half_life={self.half_life})"
     
     @classmethod
     def from_dict(cls, dict: Dict[str, Union[str, float]]) -> 'DeminishingReturnsRequirement':
         """Create a diminishing returns requirement from a dictionary."""
 
         # validate input dictionary
-        required_keys = ['req_type', 'attribute', 'slope', 'threshold']
+        required_keys = ['req_type', 'attribute', 'half_life']
         assert all(key in dict for key in required_keys), \
             f"Dictionary must contain the keys: {required_keys}"
         assert dict.get("strategy").lower() == PerformancePreferenceStrategies.DEMINISHING_RETURNS.value, \
@@ -564,22 +575,19 @@ class DeminishingReturnsRequirement(PerformanceRequirement):
         
         # unpack dictionary
         attribute = dict.get("attribute")
-        slope = dict.get("slope")
-        threshold = dict.get("threshold")
+        half_life = dict.get("half_life")
         id = dict.get("id", None) 
 
         # initiate requirement
-        return cls(attribute, slope, threshold, id)
+        return cls(attribute, half_life, id)
     
     def __eq__(self, other):
         return super().__eq__(other) and isinstance(other, DeminishingReturnsRequirement) and \
-                (abs(self.slope - other.slope) < 1e-6 
-                 and abs(self.threshold - other.threshold) < 1e-6)    
+                (abs(self.half_life - other.half_life) < 1e-6)    
     
     def to_dict(self):
         d = super().to_dict()
-        d['slope'] = self.slope
-        d['threshold'] = self.threshold
+        d['half_life'] = self.half_life
         return d
 
 class ExpDecayRequirement(PerformanceRequirement):
@@ -647,6 +655,180 @@ class ExpDecayRequirement(PerformanceRequirement):
     def to_dict(self):
         d = super().to_dict()
         d['decay_rate'] = self.decay_rate
+        return d
+    
+class SigmoidRequirement(PerformanceRequirement):
+    def __init__(self,
+                 attribute : str,
+                 slope : float,
+                 threshold : float,
+                 floor : float = 0.0,
+                 id = None
+                ):
+        """
+        ### Sigmoid Requirement
+        r_co(value) = floor + (1 - floor) / (1 + exp(-slope * (value - threshold)))
+
+        Initializes a requirement that uses a sigmoid function as a preference function.
+        - :`req_type`: The type of requirement (e.g., "capability", "temporal", "spatial").
+        - :`attribute`: The attribute being measured (e.g., "data collected", "observations made").
+        - :`slope`: The slope of the sigmoid function (higher values lead to steeper transitions). Must be positive.
+        - :`threshold`: The threshold value at which preference value is 0.5. Must be non-negative.
+        - :`floor`: The minimum preference value (default is 0.0). Must be in [0, 1).
+        """
+
+        # initiate parent class
+        super().__init__(attribute, PerformancePreferenceStrategies.SIGMOID.value, id)
+
+        # validate inputs
+        assert isinstance(slope, (int, float)), "Slope must be a number"
+        assert slope > 0, "Slope must be positive"
+        assert isinstance(threshold, (int, float)), "Threshold must be a number"
+        assert threshold >= 0, "Threshold must be non-negative"
+        assert isinstance(floor, (int, float)), "Floor must be a number"
+        assert 0.0 <= floor < 1.0, "Floor must be in [0, 1)"
+
+        # set attributes
+        self.slope : float = slope
+        self.threshold : float = threshold
+        self.floor : float = floor
+
+    def _eval_preference_function(self, value : float) -> float:
+        # validate inputs
+        assert isinstance(value, (int, float)), "Value must be a number"
+        assert value >= 0, "Value must be non-negative"
+
+        # return preference value
+        val = self.floor + (1 - self.floor) / (1 + np.exp(-self.slope * (value - self.threshold)))
+
+        if val > 1 or val < 0:
+            x = 1
+        return val
+    
+    def __repr__(self):
+        return super().__repr__()[:-1] + f", slope={self.slope}, threshold={self.threshold}, floor={self.floor})"
+    
+    @classmethod
+    def from_dict(cls, dict: Dict[str, Union[str, float]]) -> 'SigmoidRequirement':
+        """Create a sigmoid requirement from a dictionary."""
+
+        # validate input dictionary
+        required_keys = ['req_type', 'attribute', 'slope', 'threshold']
+        assert all(key in dict for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        assert dict.get("strategy").lower() == PerformancePreferenceStrategies.SIGMOID.value, \
+            f"Strategy does not match requirement definition. Must be '{PerformancePreferenceStrategies.SIGMOID.value}'"
+        
+        # unpack dictionary
+        attribute = dict.get("attribute")
+        slope = dict.get("slope")
+        threshold = dict.get("threshold")
+        floor = dict.get("floor", 0.0)  # default to 0.0 if not provided
+        id = dict.get("id", None)
+        
+        # initiate requirement
+        return cls(attribute, slope, threshold, floor, id)
+    
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, SigmoidRequirement):
+            return (abs(self.slope - other.slope) < 1e-6 and
+                    abs(self.threshold - other.threshold) < 1e-6 and
+                    abs(self.floor - other.floor) < 1e-6)
+        return False
+    
+    def to_dict(self):
+        d = super().to_dict()
+        d['slope'] = self.slope
+        d['threshold'] = self.threshold
+        d['floor'] = self.floor
+        return d
+
+class PowerRequirement(PerformanceRequirement):
+    def __init__(self,
+                 attribute : str,
+                 lower_bound : float,
+                 upper_bound : float,
+                 exponent : float,
+                 id = None 
+                ):  
+        """
+        ### Power Function Requirement
+
+        Initializes a requirement that uses a power function as a preference function.
+        - :`req_type`: The type of requirement (e.g., "capability", "temporal", "spatial").
+        - :`attribute`: The attribute being measured (e.g., "data collected", "observations made").
+        - :`lower_bound`: The lower bound of the valid range.
+        - :`upper_bound`: The upper bound of the valid range.
+        - :`exponent`: The exponent for the power function. Must be positive.
+        - :`id`: Optional unique identifier for the requirement. If not provided, a UUID will be generated.
+        """
+        # initiate parent class
+        super().__init__(attribute, PerformancePreferenceStrategies.POWER.value, id)
+
+        # validate inputs
+        assert isinstance(lower_bound, (int, float)), "Lower bound must be a number"
+        assert isinstance(upper_bound, (int, float)), "Upper bound must be a number"
+        assert isinstance(exponent, (int, float)), "Exponent must be a number"
+        assert lower_bound < upper_bound, "Lower bound must be less than upper bound"
+        assert exponent > 0, "Exponent must be positive"
+
+        # set attributes
+        self.lower_bound : float = lower_bound
+        self.upper_bound : float = upper_bound
+        self.exponent : float = exponent
+
+    def _eval_preference_function(self, value : float) -> float:
+        # validate inputs
+        assert isinstance(value, (int, float)), "Value must be a number"
+        # assert value >= 0, "Value must be non-negative"
+
+        # return preference value
+        if value < 0.0:
+            return 1.0
+        elif value < self.lower_bound:
+            return 0.0
+        elif value >= self.upper_bound:
+            return 1.0
+        else:
+            return ((value - self.lower_bound) / (self.upper_bound - self.lower_bound)) ** self.exponent
+
+    def __repr__(self):
+        return super().__repr__()[:-1] + f", lower_bound={self.lower_bound}, upper_bound={self.upper_bound}, exponent={self.exponent})"
+
+    @classmethod
+    def from_dict(cls, dict: Dict[str, Union[str, float]]) -> 'PowerRequirement':
+        """Create a power function requirement from a dictionary."""
+
+        # validate input dictionary
+        required_keys = ['req_type', 'attribute', 'lower_bound', 'upper_bound', 'exponent']
+        assert all(key in dict for key in required_keys), \
+            f"Dictionary must contain the keys: {required_keys}"
+        assert dict.get("strategy").lower() == PerformancePreferenceStrategies.POWER.value, \
+            f"Strategy does not match requirement definition. Must be '{PerformancePreferenceStrategies.POWER.value}'"
+
+        # unpack dictionary
+        req_type = dict.get("req_type")
+        attribute = dict.get("attribute")
+        lower_bound = dict.get("lower_bound")
+        upper_bound = dict.get("upper_bound")
+        exponent = dict.get("exponent")
+        id = dict.get("id", None)
+        
+        # initiate requirement
+        return cls(attribute, lower_bound, upper_bound, exponent, id)
+
+    def __eq__(self, other):
+        if super().__eq__(other) and isinstance(other, PowerRequirement):
+            return (abs(self.lower_bound - other.lower_bound) < 1e-6 and
+                    abs(self.upper_bound - other.upper_bound) < 1e-6 and
+                    abs(self.exponent - other.exponent) < 1e-6)
+        return False
+        
+    def to_dict(self):
+        d = super().to_dict()
+        d['lower_bound'] = self.lower_bound
+        d['upper_bound'] = self.upper_bound
+        d['exponent'] = self.exponent
         return d
 
 class GaussianRequirement(PerformanceRequirement):
