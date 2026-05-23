@@ -5,7 +5,7 @@ class TemporalRequirementAttributes(Enum):
     REVISIT_TIME = 'revisit_time [s]'
     CO_OBSERVATIONS = 'co_observations'
     RESPONSE_TIME = 'response_time [s]'
-    RESPONSE_TIME_NORM = 'response_time [normalized]'
+    RESPONSE_TIME_NORM = 'response_time [norm]'
     OBS_TIME = 't_img [s]'
 
 class ObservationRequirementAttributes(Enum):
