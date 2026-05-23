@@ -116,28 +116,6 @@ class ObservationOpportunity:
         if not isinstance(other, ObservationOpportunity):
             return NotImplemented
         return self.id == other.id
-    
-        # assert isinstance(other, ObservationOpportunity), \
-        #         f"Can only compare with another `ObservationOpportunity`. is of type {type(other)}."
-            
-        #     my_dict = self.to_dict()
-        #     other_dict = other.to_dict()
-
-        #     for key in my_dict:
-        #         if key not in other_dict:
-        #             return False
-        #         if my_dict[key] != other_dict[key]:
-        #             if isinstance(my_dict[key], list) and isinstance(other_dict[key], list):
-        #                 if len(my_dict[key]) != len(other_dict[key]):
-        #                     return False
-        #                 for item1, item2 in zip(my_dict[key], other_dict[key]):
-        #                     if item1 != item2:
-        #                         for item_key in item1:
-        #                             if item_key not in item2 or item1[item_key] != item2[item_key]:
-        #                                 return False
-                
-            
-        #     return self.to_dict() == other.to_dict()
 
     def is_mutually_exclusive(self, other : 'ObservationOpportunity') -> bool:
         """ Check if two tasks are mutually exclusive. """
@@ -145,15 +123,105 @@ class ObservationOpportunity:
         assert isinstance(other, ObservationOpportunity), \
             "Argument must be an instance of `ObservationOpportunity`."
 
-        # are mutually exclusive if they...
-        return (                                    
-            # are not the same observation opportunity,
-            not other == self                                  
-            # have common parent tasks,
-            and len(self.tasks.intersection(other.tasks)) > 0
-            # and have overlapping accessibility 
-            and self.accessibility.overlaps(other.accessibility)
-        )
+        # Rule 0: if they are the same observation opportunity or their accessibility intervals do not overlap, 
+        # they are not mutually exclusive (i.e. they can be scheduled at different times)
+        if other == self or not self.accessibility.overlaps(other.accessibility):
+            return False
+
+        # Rule 1: same parent task(s) with overlapping accessibility; 
+        # cannot schedule multiple observations of the same task at the same pass
+        if len(self.tasks.intersection(other.tasks)) > 0:
+            return True
+
+        # Rule 2: same event, same instrument, same pass — one observation per event per instrument per pass.
+        # Different-instrument obs opps for the same event are NOT exclusive (e.g. TIR + VNIR imaging simultaneously).
+        if self.instrument_name == other.instrument_name:
+            my_event_ids = {task.event.id for task in self.tasks
+                            if hasattr(task, 'event') and task.event is not None}
+            other_event_ids = {task.event.id for task in other.tasks
+                               if hasattr(task, 'event') and task.event is not None}
+            if my_event_ids and other_event_ids and my_event_ids & other_event_ids:
+                return True
+
+        return False
+    
+    def can_merge(self, 
+                  other : 'ObservationOpportunity', 
+                  max_duration : float = 5*60,
+                  must_overlap : bool = False 
+                ) -> bool:
+        """ 
+        Check if two tasks can be merged based on their time and slew angle. 
+        
+        **Arguments:**
+        - `other`: Other task observation opportunity to merge with.
+        - `max_duration`: The maximum allowed duration for the merged observation opportunity in seconds [s].
+        """
+               
+        # Validate inputs
+        assert isinstance(other, ObservationOpportunity), "The other observation opportunity must be an instance of `ObservationOpportunity`."
+        assert isinstance(max_duration, (float, int)), "`max_duration` must be a number."
+        assert max_duration > 0.0, "`max_duration` must be positive."
+        
+        # Calculate slew angles overlap
+        slew_angles_overlap : bool \
+            = self.slew_angles.overlaps(other.slew_angles)
+
+        # Calculate accessibility overlap and duration requirements
+        merged_accessibility, min_duration_req, max_duration_req \
+            = self._calc_merged_time_reqs(other, must_overlap)
+
+        # Gather joint observation targets
+        # my_targets = set(self.get_location())
+        # other_targets = set(other.get_location())
+        # location_overlap : bool = len(my_targets.intersection(other_targets)) > 0
+
+        # merge task accessibilities
+        task_availabilities : List[Interval] = [task.availability for task in self.tasks.union(other.tasks)]
+        merged_task_availability : Interval = reduce(lambda a, b: a.intersection(b), task_availabilities)
+        
+        # check if merged accessibility is within the intersection of the parent tasks' availability intervals
+        tasks_are_available : bool = not merged_task_availability.is_empty()
+        tasks_are_accessible : bool = tasks_are_available and merged_accessibility.is_subset(merged_task_availability)
+
+        # Check if tasks are related to the same event 
+        same_event_types = (len(self._event_types.intersection(other._event_types)) > 0
+                            or len(self._event_types) == 0 or len(other._event_types) == 0)
+
+        # check if they observe the same parameter
+        my_task_parameters = {task.parameter for task in self.tasks}
+        other_task_parameters = {task.parameter for task in other.tasks}
+        same_parameters = my_task_parameters == other_task_parameters
+
+
+        return (
+            # not the same observation opportunity
+            other is not self and
+            # same instrument      
+            self.instrument_name == other.instrument_name and
+            # duration requirements do not exceed maximum allowed duration
+            min_duration_req <= max_duration and
+            # joint minimum duration requirements is valid
+            not math.isnan(min_duration_req) and
+            # accessibility window encompasses the duration requirements
+            min_duration_req <= merged_accessibility.span() and
+            # merged accessibility does not exceed maximum allowed duration
+            merged_accessibility.span() <= max_duration_req and
+            # slew angles overlap
+            slew_angles_overlap and
+            # there exist a valid joint accessibility window 
+            not merged_accessibility.is_empty() and
+            merged_accessibility.left >= 0.0 and
+            merged_accessibility.right >= 0.0 and
+            # there exists overlap between the tasks' availability intervals
+            tasks_are_available and
+            # there merged accessibility is within the intersection of the parent tasks' availability intervals
+            tasks_are_accessible 
+            # they observe the same event types
+            and same_event_types
+            # they observe the same parameters
+            and same_parameters
+        ) 
 
     # -------------------------------------------
     #               MERGING METHODS
@@ -267,80 +335,7 @@ class ObservationOpportunity:
         """ Calculates the joint availability interval for the observation opportunity based on the availability intervals of its parent tasks. """
         task_availabilities : List[Interval] = [task.availability for task in tasks]
         if not task_availabilities: return Interval(np.NINF, np.inf, True, True)
-        return reduce(lambda a, b: a.intersection(b), task_availabilities)    
-
-    def can_merge(self, 
-                  other : 'ObservationOpportunity', 
-                  max_duration : float = 5*60,
-                  must_overlap : bool = False 
-                ) -> bool:
-        """ 
-        Check if two tasks can be merged based on their time and slew angle. 
-        
-        **Arguments:**
-        - `other`: Other task observation opportunity to merge with.
-        - `max_duration`: The maximum allowed duration for the merged observation opportunity in seconds [s].
-        """
-               
-        # Validate inputs
-        assert isinstance(other, ObservationOpportunity), "The other observation opportunity must be an instance of `ObservationOpportunity`."
-        assert isinstance(max_duration, (float, int)), "`max_duration` must be a number."
-        assert max_duration > 0.0, "`max_duration` must be positive."
-        
-        # Calculate slew angles overlap
-        slew_angles_overlap : bool \
-            = self.slew_angles.overlaps(other.slew_angles)
-
-        # Calculate accessibility overlap and duration requirements
-        merged_accessibility, min_duration_req, max_duration_req \
-            = self._calc_merged_time_reqs(other, must_overlap)
-
-        # Gather joint observation targets
-        # my_targets = set(self.get_location())
-        # other_targets = set(other.get_location())
-        # location_overlap : bool = len(my_targets.intersection(other_targets)) > 0
-
-        # merge task accessibilities
-        task_availabilities : List[Interval] = [task.availability for task in self.tasks.union(other.tasks)]
-        merged_task_availability : Interval = reduce(lambda a, b: a.intersection(b), task_availabilities)
-        
-        # check if merged accessibility is within the intersection of the parent tasks' availability intervals
-        tasks_are_available : bool = not merged_task_availability.is_empty()
-        tasks_are_accessible : bool = tasks_are_available and merged_accessibility.is_subset(merged_task_availability)
-
-        # Check if tasks are related to the same event 
-        same_event_types = (len(self._event_types.intersection(other._event_types)) > 0
-                            or len(self._event_types) == 0 or len(other._event_types) == 0)
-        
-        if not same_event_types:
-            x = 1
-
-        return (
-            # not the same observation opportunity
-            other is not self and
-            # same instrument      
-            self.instrument_name == other.instrument_name and
-            # duration requirements do not exceed maximum allowed duration
-            min_duration_req <= max_duration and
-            # joint minimum duration requirements is valid
-            not math.isnan(min_duration_req) and
-            # accessibility window encompasses the duration requirements
-            min_duration_req <= merged_accessibility.span() and
-            # merged accessibility does not exceed maximum allowed duration
-            merged_accessibility.span() <= max_duration_req and
-            # slew angles overlap
-            slew_angles_overlap and
-            # there exist a valid joint accessibility window 
-            not merged_accessibility.is_empty() and
-            merged_accessibility.left >= 0.0 and
-            merged_accessibility.right >= 0.0 and
-            # there exists overlap between the tasks' availability intervals
-            tasks_are_available and
-            # there merged accessibility is within the intersection of the parent tasks' availability intervals
-            tasks_are_accessible 
-            # they observe the same event types
-            and same_event_types
-        ) 
+        return reduce(lambda a, b: a.intersection(b), task_availabilities)       
     
     def merge(self, 
               other : 'ObservationOpportunity', 
