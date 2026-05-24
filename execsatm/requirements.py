@@ -118,6 +118,10 @@ class MissionRequirement(ABC):
         # return self.to_dict() == other.to_dict()
         comp_attrs = ['req_type', 'attribute', 'id']
         return all(getattr(self, attr) ==  getattr(other, attr) for attr in comp_attrs)
+    
+    def __hash__(self):
+        """Hash function for the measurement requirement."""
+        return hash((self.req_type, self.attribute, self.id))
 """
 ------------------------------------
 PERFORMANCE REQUIREMENT DEFINITIONS
