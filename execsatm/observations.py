@@ -168,8 +168,12 @@ class ObservationOpportunity:
             = self.slew_angles.overlaps(other.slew_angles)
 
         # Calculate accessibility overlap and duration requirements
-        merged_accessibility, min_duration_req, max_duration_req \
-            = self._calc_merged_time_reqs(other, must_overlap)
+        try:
+            merged_accessibility, min_duration_req, max_duration_req \
+                = self._calc_merged_time_reqs(other, must_overlap)
+        except ValueError:
+            # merged accessibility has invalid bounds; cannot merge
+            return False
 
         # Gather joint observation targets
         # my_targets = set(self.get_location())
