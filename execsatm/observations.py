@@ -45,7 +45,7 @@ class ObservationOpportunity:
         assert isinstance(id, str) or id is None, "ID must be a string or `None`."
         
         # compute joint availability interval based on parent tasks' availability intervals
-        availability = self.__merge_task_availability(tasks)
+        availability = self.__merge_task_availability(tasks, task_min_duration, accessibility)
         
         # validate input values
         assert not tasks or not availability.is_empty(), "The parent tasks of the observation opportunity must have overlapping availability intervals."
@@ -175,14 +175,10 @@ class ObservationOpportunity:
             # merged accessibility has invalid bounds; cannot merge
             return False
 
-        # Gather joint observation targets
-        # my_targets = set(self.get_location())
-        # other_targets = set(other.get_location())
-        # location_overlap : bool = len(my_targets.intersection(other_targets)) > 0
-
         # merge task accessibilities
-        task_availabilities : List[Interval] = [task.availability for task in self.tasks.union(other.tasks)]
-        merged_task_availability : Interval = reduce(lambda a, b: a.intersection(b), task_availabilities)
+        merged_tasks = self.tasks.union(other.tasks)
+        merged_min_duration = {**self.task_min_duration, **other.task_min_duration}
+        merged_task_availability : Interval = self.__merge_task_availability(merged_tasks, merged_min_duration, merged_accessibility)
         
         # check if merged accessibility is within the intersection of the parent tasks' availability intervals
         tasks_are_available : bool = not merged_task_availability.is_empty()
@@ -335,11 +331,42 @@ class ObservationOpportunity:
     #     return reduce(lambda a, b: a.intersection(b), task_slew_angles.values())
         
     @staticmethod
-    def __merge_task_availability(tasks : Set[GenericObservationTask]) -> Interval:
+    def __merge_task_availability(tasks : Set[GenericObservationTask], 
+                                  task_min_duration : float, 
+                                  accessibility : Interval
+                                ) -> Interval:
         """ Calculates the joint availability interval for the observation opportunity based on the availability intervals of its parent tasks. """
+        # task_availabilities : List[Interval] = [task.availability for task in tasks]
+        # if not task_availabilities: return Interval(np.NINF, np.inf, True, True)
+        # return reduce(lambda a, b: a.intersection(b), task_availabilities)       
+
+        # base case for empty set of tasks
+        if not tasks: return Interval(np.NINF, np.inf, True, True)
+        
+        # compile accessibilities
         task_availabilities : List[Interval] = [task.availability for task in tasks]
-        if not task_availabilities: return Interval(np.NINF, np.inf, True, True)
-        return reduce(lambda a, b: a.intersection(b), task_availabilities)       
+        availability_overlap = reduce(lambda a, b: a.intersection(b), task_availabilities)       
+
+        # check if there is any overlap between the tasks' availability intervals
+        needs_extension : bool = (availability_overlap.is_empty() 
+                                  or availability_overlap.span() <= 0.0
+                                  or not accessibility.is_subset(availability_overlap)
+                                  )
+        
+        # if the overlap exists, the availability is the intersection of the tasks' availability intervals; 
+        if not needs_extension: return availability_overlap
+        
+        # otherwise, check if the accesibility interval was extended to accommodate the tasks' accessibility intervals; 
+        if all(task.availability.overlaps(accessibility) 
+               and task.availability.intersection(accessibility).span() >= task_min_duration[task.id] 
+               for task in tasks):
+            # if so, the availability is the merged accessibility interval
+            return accessibility
+        
+        # if there is no overlap between the tasks' availability intervals or the merged accessibility;
+        # there is not valid availability interval for the observation opportunity; return an empty interval
+        return EmptyInterval()
+    
     
     def merge(self, 
               other : 'ObservationOpportunity', 
