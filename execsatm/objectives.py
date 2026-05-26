@@ -75,10 +75,21 @@ class MissionObjective(ABC):
 
         # Evaluate measurement performance for each requirement attribute 
         #  and return product of all preference values
+        # PRODUCT
         return math.prod(
             req.calc_preference(attribute, measurement[attribute])
             for attribute, req in self.requirements.items()
         )
+
+        # # VECTOR NORM
+        # return math.sqrt(sum(pow(req.calc_preference(attribute, measurement[attribute]), 2) 
+        #                      for attribute, req in self.requirements.items()))
+        
+        # MINIMUM
+        # return min(
+        #     req.calc_preference(attribute, measurement[attribute])
+        #     for attribute, req in self.requirements.items()
+        # )
 
     def to_dict(self) -> Dict[str, Union[str, float]]:
         """Convert the objective to a dictionary."""
