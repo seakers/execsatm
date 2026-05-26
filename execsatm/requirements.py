@@ -546,15 +546,8 @@ class DeminishingReturnsRequirement(PerformanceRequirement):
         assert isinstance(value, int) and value > 0, \
             "Value must be a positive integer"
         
+        return 0.5**((value-1)/self.half_life)
         # val = self.slope**(value - self.threshold) * (1 - self.slope)
-        val = 0.5**((value-1)/self.half_life)
-
-        if val < 0:
-            x = 1
-        if val > 1:
-            x = 1
-
-        return val
 
         # # calculate preference values of value and value-1
         # p_i_mins_1  = 1 / (1 + np.exp(-self.slope * (value - 1 - self.threshold)))
@@ -2221,12 +2214,16 @@ class CoObservationRequirement(CoordinationRequirement):
       names to their latest observation timestamps (any consistent unit, e.g. seconds).
     - The count of types within the window is forwarded to an internal `PerformanceRequirement`
       delegate that applies the chosen scoring strategy (e.g. `discrete_intervals`).
+    - `repeat_penalty_fraction` : float, default 0.9 Fractional reduction applied to the floor score for repeat observations
+      (same parameter type already observed within decorrelation_time). A value of 0.9 means a repeat observation scores 10% of the floor.
+       Range [0, 1]: 0 = no penalty (repeat equals floor), 1 = zero score.
     """
     ATTRIBUTE = 'co_observations'
 
     def __init__(self,
-                 decorrelation_time: float,
                  scoring_req: 'PerformanceRequirement',
+                 decorrelation_time: float,
+                 repeat_penalty_fraction = 0.9,
                  id=None):
         super().__init__(RequirementTypes.COORDINATION.value, self.ATTRIBUTE, id)
 
@@ -2235,15 +2232,18 @@ class CoObservationRequirement(CoordinationRequirement):
         assert isinstance(scoring_req, PerformanceRequirement), \
             "scoring_req must be a PerformanceRequirement instance"
 
-        self.decorrelation_time: float = float(decorrelation_time)
         self.strategy: str = scoring_req.strategy
+        self.decorrelation_time: float = float(decorrelation_time)
+        self.repeat_penalty_fraction: float = float(repeat_penalty_fraction) 
         self._scoring_req: PerformanceRequirement = scoring_req
 
     def _eval_preference_function(self, observations: Dict[str, float]) -> float:
-        assert isinstance(observations, dict), \
+        assert isinstance(observations, dict) or observations is None, \
             "observations must be a dict mapping measurement type to latest observation time"
 
-        if not observations:
+        if observations is None:
+            return self._scoring_req._eval_preference_function(0) * (1 - self.repeat_penalty_fraction)
+        elif not observations:
             count = 0
         else:
             reference_time = max(observations.values())
@@ -2256,11 +2256,13 @@ class CoObservationRequirement(CoordinationRequirement):
 
     def __repr__(self):
         return (f"CoObservationRequirement(strategy={self.strategy}, "
-                f"decorrelation_time={self.decorrelation_time})")
+                f"decorrelation_time={self.decorrelation_time}, "
+                f"repeat_penalty_fraction={self.repeat_penalty_fraction})")
 
     def to_dict(self) -> Dict:
         d = super().to_dict()
         d['decorrelation_time [s]'] = self.decorrelation_time
+        d['repeat_penalty_fraction'] = self.repeat_penalty_fraction
         strategy_d = self._scoring_req.to_dict()
         d['strategy'] = strategy_d['strategy']
         for key, val in strategy_d.items():
@@ -2277,18 +2279,21 @@ class CoObservationRequirement(CoordinationRequirement):
             f"Attribute must be '{cls.ATTRIBUTE}'"
 
         decorrelation_time = d['decorrelation_time [s]']
+        repeat_penalty_fraction = d.get('repeat_penalty_fraction', 0.9)
 
         # Build a synthetic performance dict so we can delegate to existing strategy logic
         perf_dict = {k: v for k, v in d.items() if k != 'decorrelation_time [s]'}
         perf_dict['req_type'] = RequirementTypes.PERFORMANCE.value
         scoring_req = PerformanceRequirement.from_dict(perf_dict)
 
-        return cls(decorrelation_time, scoring_req, d.get('id', None))
+        return cls(scoring_req, decorrelation_time, repeat_penalty_fraction, d.get('id', None))
 
     def __eq__(self, other):
         if not (super().__eq__(other) and isinstance(other, CoObservationRequirement)):
             return False
         if abs(self.decorrelation_time - other.decorrelation_time) >= 1e-6:
+            return False
+        if abs(self.repeat_penalty_fraction - other.repeat_penalty_fraction) >= 1e-6:
             return False
         # Compare scoring strategy parameters by dict value, excluding identity fields
         # (internal scoring reqs get fresh UUIDs so we cannot use _scoring_req.__eq__)
