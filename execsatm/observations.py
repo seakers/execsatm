@@ -397,22 +397,21 @@ class ObservationOpportunity:
                                   accessibility : Interval
                                 ) -> Interval:
         """ Calculates the joint availability interval for the observation opportunity based on the availability intervals of its parent tasks. """
-        # task_availabilities : List[Interval] = [task.availability for task in tasks]
-        # if not task_availabilities: return Interval(np.NINF, np.inf, True, True)
-        # return reduce(lambda a, b: a.intersection(b), task_availabilities)       
 
         # base case for empty set of tasks
         if not tasks: return Interval(np.NINF, np.inf, True, True)
         
         # compile accessibilities
         task_availabilities : List[Interval] = [task.availability for task in tasks]
+        # if not task_availabilities: return Interval(np.NINF, np.inf, True, True)
+        # return reduce(lambda a, b: a.intersection(b), task_availabilities)       
         availability_overlap = reduce(lambda a, b: a.intersection(b), task_availabilities)       
 
         # check if there is any overlap between the tasks' availability intervals
-        needs_extension : bool = (availability_overlap.is_empty() 
+        needs_extension : bool = (availability_overlap.is_empty()
                                   or availability_overlap.span() <= 0.0
                                   or not accessibility.is_subset(availability_overlap)
-                                #   or any(not availability_overlap.overlaps(task_accessibility[task.id]) for task in tasks)
+                                  or any(not availability_overlap.overlaps(task_accessibility[task.id]) for task in tasks)
                                 )
         
         # if the overlap exists, the availability is the intersection of the tasks' availability intervals; 
@@ -422,11 +421,22 @@ class ObservationOpportunity:
         # if all(task.availability.overlaps(accessibility) 
         #        and task.availability.intersection(accessibility).span() >= task_min_duration[task.id] 
         #        for task in tasks):
+        # original condition (a/b test: does not guard against empty intersections when task_min_duration == 0)
+        # if all(
+        #         task_accessibility[task.id]
+        #             .intersection(accessibility)
+        #             .intersection(task.availability)
+        #             .span() >= task_min_duration[task.id]
+        #         for task in tasks
+        #     ):
+        #     # if so, the availability is the merged accessibility interval
+        #     return accessibility
         if all(
-                task_accessibility[task.id]
-                    .intersection(accessibility)
-                    .intersection(task.availability)
-                    .span() >= task_min_duration[task.id]
+                (lambda i: not i.is_empty() and i.span() >= task_min_duration[task.id])(
+                    task_accessibility[task.id]
+                        .intersection(accessibility)
+                        .intersection(task.availability)
+                )
                 for task in tasks
             ):
             # if so, the availability is the merged accessibility interval
